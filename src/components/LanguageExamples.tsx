@@ -206,7 +206,7 @@ const LanguageExamples = ({ path }: LanguageExamplesProps) => {
 
   return (
     <div className="d-flex flex-column h-100">
-      <div className="card-header bg-white">
+      <div className="card-header">
         <div className="d-flex justify-content-between align-items-center">
           <h6 className="mb-0 fw-bold">
             <i className="bi bi-code-slash me-2 text-primary"></i>
@@ -268,9 +268,9 @@ const LanguageExamples = ({ path }: LanguageExamplesProps) => {
             {enabledLanguages.map(lang => {
               const example = lang.getExample(path);
               return (
-                <div key={lang.id} className="border rounded p-2 bg-light">
-                  <div className="d-flex justify-content-between align-items-center mb-1">
-                    <span className="fw-semibold small">{lang.name}</span>
+                <div key={lang.id} className="border rounded p-3 bg-light">
+                  <div className="d-flex justify-content-between align-items-center mb-2">
+                    <span className="fw-semibold">{lang.name}</span>
                     <button
                       onClick={() => handleCopy(example, lang.id)}
                       className={`btn btn-sm py-0 px-2 ${
@@ -293,8 +293,8 @@ const LanguageExamples = ({ path }: LanguageExamplesProps) => {
                       )}
                     </button>
                   </div>
-                  <div className="bg-white p-1 rounded border">
-                    <code className="text-break" style={{ fontSize: '11px' }}>
+                  <div className="bg-white p-2 rounded border">
+                    <code className="text-break font-monospace" style={{ fontSize: '13px' }}>
                       {example}
                     </code>
                   </div>
