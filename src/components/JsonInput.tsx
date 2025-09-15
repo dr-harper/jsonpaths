@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 
 interface JsonInputProps {
   onChange: (value: string) => void;
@@ -7,6 +7,7 @@ interface JsonInputProps {
 
 const JsonInput = ({ onChange, error }: JsonInputProps) => {
   const [value, setValue] = useState('');
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const newValue = e.target.value;
@@ -53,17 +54,69 @@ const JsonInput = ({ onChange, error }: JsonInputProps) => {
     onChange(sampleJson);
   };
 
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const text = event.target?.result as string;
+      try {
+        const parsed = JSON.parse(text);
+        const formatted = JSON.stringify(parsed, null, 2);
+        setValue(formatted);
+        onChange(formatted);
+      } catch {
+        setValue(text);
+        onChange(text);
+      }
+    };
+    reader.readAsText(file);
+  };
+
+  const handleFileLoad = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleDownload = () => {
+    const blob = new Blob([value], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'data.json';
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   return (
     <div className="h-full flex flex-col">
       <div className="p-4 border-b border-gray-200">
         <div className="flex justify-between items-center mb-2">
           <h2 className="text-lg font-semibold text-gray-700">JSON Input</h2>
           <div className="flex gap-2">
+            <input
+              type="file"
+              accept="application/json"
+              ref={fileInputRef}
+              onChange={handleFileChange}
+              className="hidden"
+            />
+            <button
+              onClick={handleFileLoad}
+              className="px-3 py-1 text-sm bg-primary text-white rounded hover:bg-blue-600 transition"
+            >
+              Load File
+            </button>
             <button
               onClick={loadSample}
               className="px-3 py-1 text-sm bg-secondary text-white rounded hover:bg-cyan-600 transition"
             >
               Load Sample
+            </button>
+            <button
+              onClick={handleDownload}
+              className="px-3 py-1 text-sm bg-success text-white rounded hover:bg-green-600 transition"
+            >
+              Download JSON
             </button>
             <button
               onClick={handleClear}
