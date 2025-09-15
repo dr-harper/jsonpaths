@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 
 interface LanguageExamplesProps {
   path: string[];
+  theme?: 'light' | 'dark';
 }
 
 interface LanguageConfig {
@@ -11,7 +12,7 @@ interface LanguageConfig {
   getExample: (path: string[]) => string;
 }
 
-const LanguageExamples = ({ path }: LanguageExamplesProps) => {
+const LanguageExamples = ({ path, theme = 'light' }: LanguageExamplesProps) => {
   const [showSettings, setShowSettings] = useState(false);
   const [copied, setCopied] = useState<string | null>(null);
 
@@ -206,7 +207,7 @@ const LanguageExamples = ({ path }: LanguageExamplesProps) => {
 
   return (
     <div className="d-flex flex-column h-100">
-      <div className="card-header bg-white">
+      <div className={`card-header ${theme === 'dark' ? 'bg-dark' : 'bg-white'}`}>
         <div className="d-flex justify-content-between align-items-center">
           <h6 className="mb-0 fw-bold">
             <i className="bi bi-code-slash me-2 text-primary"></i>
@@ -231,7 +232,7 @@ const LanguageExamples = ({ path }: LanguageExamplesProps) => {
             onClick={() => setShowSettings(false)}
           />
           <div className="position-absolute top-0 end-0 mt-5 me-3" style={{ zIndex: 1050 }}>
-            <div className="card shadow-lg" style={{ width: '250px' }}>
+            <div className={`card shadow-lg ${theme === 'dark' ? 'text-bg-dark' : ''}`} style={{ width: '250px' }}>
               <div className="card-body">
                 <h6 className="card-title mb-3">Select Languages</h6>
                 <div style={{ maxHeight: '400px', overflowY: 'auto' }}>
@@ -268,7 +269,10 @@ const LanguageExamples = ({ path }: LanguageExamplesProps) => {
             {enabledLanguages.map(lang => {
               const example = lang.getExample(path);
               return (
-                <div key={lang.id} className="border rounded p-2 bg-light">
+                <div
+                  key={lang.id}
+                  className={`border rounded p-2 ${theme === 'dark' ? 'bg-dark border-secondary' : 'bg-light'}`}
+                >
                   <div className="d-flex justify-content-between align-items-center mb-1">
                     <span className="fw-semibold small">{lang.name}</span>
                     <button
@@ -293,7 +297,7 @@ const LanguageExamples = ({ path }: LanguageExamplesProps) => {
                       )}
                     </button>
                   </div>
-                  <div className="bg-white p-1 rounded border">
+                  <div className={`${theme === 'dark' ? 'bg-dark border-secondary' : 'bg-white'} p-1 rounded border`}>
                     <code className="text-break" style={{ fontSize: '11px' }}>
                       {example}
                     </code>

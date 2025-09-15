@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import LanguageExamples from './components/LanguageExamples';
 import JsonTreeView from './components/JsonTreeView';
 
@@ -18,6 +18,33 @@ function App() {
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [viewMode, setViewMode] = useState<'tree' | 'compact' | 'raw'>('tree');
 
+  const getInitialTheme = (): 'light' | 'dark' => {
+    const stored = localStorage.getItem('theme') as 'light' | 'dark' | null;
+    if (stored) return stored;
+    return window.matchMedia('(prefers-color-scheme: dark)').matches
+      ? 'dark'
+      : 'light';
+  };
+
+  const [theme, setTheme] = useState<'light' | 'dark'>(getInitialTheme);
+
+  useEffect(() => {
+    const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+    const handleChange = (e: MediaQueryListEvent) => {
+      if (!localStorage.getItem('theme')) {
+        setTheme(e.matches ? 'dark' : 'light');
+      }
+    };
+    mediaQuery.addEventListener('change', handleChange);
+    return () => mediaQuery.removeEventListener('change', handleChange);
+  }, []);
+
+  const toggleTheme = () => {
+    const newTheme = theme === 'light' ? 'dark' : 'light';
+    setTheme(newTheme);
+    localStorage.setItem('theme', newTheme);
+  };
+
   const handleJsonChange = (value: string) => {
     setJsonInput(value);
     if (!value.trim()) {
@@ -30,7 +57,7 @@ function App() {
       const parsed = JSON.parse(value);
       setJsonData(parsed);
       setError('');
-    } catch (e) {
+    } catch {
       setError('Invalid JSON format');
       setJsonData(null);
     }
@@ -70,81 +97,34 @@ function App() {
   };
 
 
-  const renderJsonTree = (data: JsonData, path: string[] = [], level: number = 0) => {
-    const indent = level * 20;
-
-    if (data === null) {
-      return <span className="text-muted">null</span>;
-    }
-
-    if (typeof data === 'boolean') {
-      return <span className="text-primary fw-medium">{String(data)}</span>;
-    }
-
-    if (typeof data === 'number') {
-      return <span className="text-primary fw-medium">{data}</span>;
-    }
-
-    if (typeof data === 'string') {
-      const truncated = data.length > 60 ? data.substring(0, 60) + '...' : data;
-      return <span className="text-success" title={data}>"{truncated}"</span>;
-    }
-
-    if (Array.isArray(data)) {
-      return (
-        <div style={{ marginLeft: indent }}>
-          <span className="text-secondary">[</span>
-          {data.map((item, index) => (
-            <div key={index} className="my-1">
-              <span
-                className="text-dark hover-primary cursor-pointer px-1 py-0 rounded"
-                onClick={() => setSelectedPath([...path, String(index)])}
-                style={{ cursor: 'pointer' }}
-              >
-                {index}:
-              </span>{' '}
-              {renderJsonTree(item, [...path, String(index)], level + 1)}
-            </div>
-          ))}
-          <span className="text-secondary">]</span>
-        </div>
-      );
-    }
-
-    if (typeof data === 'object' && data !== null) {
-      return (
-        <div style={{ marginLeft: indent }}>
-          <span className="text-secondary">{'{'}</span>
-          {Object.entries(data).map(([key, val]) => (
-            <div key={key} className="my-1">
-              <span
-                className="text-dark hover-primary cursor-pointer px-1 py-0 rounded"
-                onClick={() => setSelectedPath([...path, key])}
-                style={{ cursor: 'pointer' }}
-              >
-                "{key}":
-              </span>{' '}
-              {renderJsonTree(val, [...path, key], level + 1)}
-            </div>
-          ))}
-          <span className="text-secondary">{'}'}</span>
-        </div>
-      );
-    }
-
-    return null;
-  };
-
   return (
-    <div className="d-flex flex-column vh-100 bg-light">
+    <div
+      className={`d-flex flex-column vh-100 ${theme === 'dark' ? 'bg-dark text-light' : 'bg-light'}`}
+      data-bs-theme={theme}
+    >
       {/* Bootstrap Navbar */}
-      <nav className="navbar navbar-expand-lg navbar-dark bg-primary">
+      <nav className={`navbar navbar-expand-lg ${theme === 'dark' ? 'navbar-dark bg-dark' : 'navbar-dark bg-primary'}`}>
         <div className="container-fluid">
           <a className="navbar-brand fw-bold" href="#">
             <i className="bi bi-braces me-2"></i>
             JSON Path Navigator
           </a>
-          <span className="badge bg-light text-primary">v1.0.0</span>
+          <div className="d-flex align-items-center gap-2">
+            <span
+              className={`badge ${
+                theme === 'dark' ? 'bg-secondary text-light' : 'bg-light text-primary'
+              }`}
+            >
+              v1.0.0
+            </span>
+            <button
+              className="btn btn-sm btn-outline-light"
+              onClick={toggleTheme}
+              aria-label="Toggle theme"
+            >
+              <i className={`bi ${theme === 'dark' ? 'bi-sun' : 'bi-moon'}`}></i>
+            </button>
+          </div>
         </div>
       </nav>
 
@@ -154,8 +134,8 @@ function App() {
           <div className="row g-3 flex-fill">
             {/* JSON Input Card */}
             <div className="col-12 col-md-6 col-lg-4 mb-3 mb-lg-0 d-flex">
-              <div className="card w-100 shadow-sm d-flex flex-column">
-                <div className="card-header bg-white">
+              <div className={`card w-100 shadow-sm d-flex flex-column ${theme === 'dark' ? 'text-bg-dark' : ''}`}>
+                <div className={`card-header ${theme === 'dark' ? 'bg-dark border-secondary' : 'bg-white'}`}>
                   <div className="d-flex justify-content-between align-items-center">
                     <h6 className="mb-0 fw-bold">
                       <i className="bi bi-code-square me-2 text-primary"></i>
@@ -206,8 +186,8 @@ function App() {
 
             {/* Structure View */}
             <div className="col-12 col-md-6 col-lg-4 mb-3 mb-lg-0 d-flex">
-              <div className="card w-100 shadow-sm d-flex flex-column">
-                <div className="card-header bg-white">
+              <div className={`card w-100 shadow-sm d-flex flex-column ${theme === 'dark' ? 'text-bg-dark' : ''}`}>
+                <div className={`card-header ${theme === 'dark' ? 'bg-dark border-secondary' : 'bg-white'}`}>
                   <div className="d-flex justify-content-between align-items-center">
                     <h6 className="mb-0 fw-bold">
                       <i className="bi bi-diagram-3 me-2 text-primary"></i>
@@ -261,6 +241,7 @@ function App() {
                       onPathSelect={setSelectedPath}
                       searchTerm={searchTerm}
                       viewMode={viewMode}
+                      theme={theme}
                     />
                   ) : (
                     <div className="text-center text-muted py-5">
@@ -275,8 +256,8 @@ function App() {
 
             {/* Language Examples Panel */}
             <div className="col-12 col-md-12 col-lg-4 d-flex">
-              <div className="card w-100 shadow-sm d-flex flex-column">
-                <LanguageExamples path={selectedPath} />
+              <div className={`card w-100 shadow-sm d-flex flex-column ${theme === 'dark' ? 'text-bg-dark' : ''}`}>
+                <LanguageExamples path={selectedPath} theme={theme} />
               </div>
             </div>
           </div>
@@ -284,7 +265,7 @@ function App() {
       </main>
 
       {/* Footer */}
-      <footer className="bg-white border-top py-3">
+      <footer className={`border-top py-3 ${theme === 'dark' ? 'bg-dark text-light' : 'bg-white'}`}>
         <div className="container-fluid">
           <div className="d-flex justify-content-between align-items-center">
             <small className="text-muted">© 2024 JSON Path Navigator</small>
