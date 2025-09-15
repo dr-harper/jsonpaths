@@ -1,0 +1,89 @@
+name: Preview PR
+
+on:
+  pull_request:
+    branches: [ "main" ]
+
+permissions:
+  contents: write
+  pull-requests: write
+  pages: write
+  id-token: write
+
+jobs:
+  build-and-deploy-preview:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: 20
+        cache: 'npm'
+
+    - name: Install dependencies
+      run: npm ci
+
+    - name: Update base path for PR preview
+      run: |
+        echo "Updating vite.config.ts for PR preview..."
+        sed -i "s|base: '/jsonpaths/'|base: '/jsonpaths/pr/${{ github.event.number }}/'|g" vite.config.ts
+        cat vite.config.ts
+
+    - name: Build project
+      run: npm run build
+      env:
+        BUILD_VERSION: ${{ github.sha }}
+
+    - name: Deploy preview
+      id: deploy
+      uses: peaceiris/actions-gh-pages@v4
+      with:
+        github_token: ${{ secrets.GITHUB_TOKEN }}
+        publish_branch: gh-pages
+        publish_dir: ./dist
+        destination_dir: pr/${{ github.event.number }}
+        keep_files: true
+
+    - name: Comment preview URL
+      uses: actions/github-script@v7
+      with:
+        github-token: ${{ secrets.GITHUB_TOKEN }}
+        script: |
+          const pr = context.payload.pull_request.number;
+          const url = `https://dr-harper.github.io/jsonpaths/pr/${pr}/`;
+
+          // Check if we already commented
+          const comments = await github.rest.issues.listComments({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            issue_number: pr,
+          });
+
+          const botComment = comments.data.find(comment =>
+            comment.user.type === 'Bot' &&
+            comment.body.includes('🔗 Preview URL:')
+          );
+
+          const body = `🔗 **Preview URL:** ${url}\n\n✨ This preview will be updated automatically when you push new commits to this PR.`;
+
+          if (botComment) {
+            // Update existing comment
+            await github.rest.issues.updateComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              comment_id: botComment.id,
+              body: body,
+            });
+          } else {
+            // Create new comment
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: pr,
+              body: body,
+            });
+          }
