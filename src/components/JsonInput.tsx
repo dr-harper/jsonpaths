@@ -93,6 +93,7 @@ const JsonInput = ({ onChange, error }: JsonInputProps) => {
         <div className="flex justify-between items-center mb-2">
           <h2 className="text-lg font-semibold text-gray-700">JSON Input</h2>
           <div className="flex gap-2">
+            {/* Hidden file input triggered by the "Load File" button */}
             <input
               type="file"
               accept="application/json"
