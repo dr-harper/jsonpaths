@@ -59,6 +59,46 @@ function App() {
     }
   };
 
+  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    // Check if file is JSON
+    if (!file.name.endsWith('.json') && file.type !== 'application/json') {
+      setError('Please upload a valid JSON file');
+      return;
+    }
+
+    // Check file size (limit to 10MB)
+    if (file.size > 10 * 1024 * 1024) {
+      setError('File size must be less than 10MB');
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const content = e.target?.result as string;
+        const parsed = JSON.parse(content);
+        setJsonInput(JSON.stringify(parsed, null, 2));
+        setJsonData(parsed);
+        setError('');
+      } catch (err) {
+        setError('Failed to parse JSON file. Please check the file format.');
+        setJsonData(null);
+      }
+    };
+
+    reader.onerror = () => {
+      setError('Failed to read file');
+    };
+
+    reader.readAsText(file);
+
+    // Reset the input so the same file can be uploaded again if needed
+    event.target.value = '';
+  };
+
   const loadSample = () => {
     const sampleJson = JSON.stringify({
       "user": {
@@ -202,13 +242,25 @@ function App() {
                       <button
                         onClick={loadSample}
                         className="btn btn-primary"
+                        title="Load sample JSON"
                       >
                         <i className="bi bi-download me-1"></i>
                         Sample
                       </button>
+                      <label className="btn btn-outline-primary" title="Upload JSON file">
+                        <i className="bi bi-upload me-1"></i>
+                        Upload
+                        <input
+                          type="file"
+                          className="d-none"
+                          accept=".json,application/json"
+                          onChange={handleFileUpload}
+                        />
+                      </label>
                       <button
                         onClick={() => handleJsonChange('')}
                         className="btn btn-outline-secondary"
+                        title="Clear all content"
                       >
                         <i className="bi bi-x-lg me-1"></i>
                         Clear

@@ -45,3 +45,7 @@ build
 
 # OS files
 Thumbs.db
+
+# Test files
+test-data.json
+*.test.json
