@@ -73,7 +73,23 @@ jobs:
 
           # Run Codex analysis for concise summary
           echo "🤖 Starting Codex analysis..."
-          codex exec --full-auto "Read issue_analysis.md and provide a CONCISE 3-4 sentence analysis: 1) Issue type and severity 2) Root cause 3) Recommended solution. If this needs code changes, end with 'SIGNIFICANT_CHANGE: true' otherwise 'SIGNIFICANT_CHANGE: false'. Be brief and actionable." > codex_analysis.txt 2>&1
+
+          # Create a more specific prompt file for just the final answer
+          cat > codex_prompt.md << 'EOF'
+          Read the issue_analysis.md file and provide ONLY a 2-3 sentence response in this exact format:
+
+          **Type:** [bug/enhancement/question] | **Severity:** [low/medium/high]
+          **Analysis:** [Brief root cause in 1 sentence]
+          **Action:** [Recommended solution in 1 sentence] CHANGE_NEEDED:[yes/no]
+
+          Do not include any reasoning, thinking, or metadata. Just the final assessment.
+          EOF
+
+          # Use codex with a simple file-based prompt
+          codex exec --full-auto "$(cat codex_prompt.md)" > codex_raw.txt 2>&1
+
+          # Extract only the final answer (last few lines that match our format)
+          tail -10 codex_raw.txt | grep -E "(Type:|Analysis:|Action:)" > codex_analysis.txt || echo "Analysis failed" > codex_analysis.txt
 
           # Check if analysis was successful
           if [ $? -eq 0 ] && [ -s codex_analysis.txt ]; then
@@ -100,35 +116,14 @@ jobs:
               rawAnalysis = '❌ **Analysis Failed**: Could not read Codex output file.';
             }
 
-            // Extract clean analysis (remove Codex logging/metadata)
-            const lines = rawAnalysis.split('\n');
-            let cleanAnalysis = '';
-            let foundAnalysis = false;
+            // The analysis should already be clean from grep filtering
+            let cleanAnalysis = rawAnalysis.trim();
 
-            for (const line of lines) {
-              // Skip Codex metadata lines
-              if (line.includes('[2025-') || line.includes('codex') || line.includes('exec bash') || line.includes('tokens used:')) {
-                continue;
-              }
-              // Look for actual analysis content
-              if (line.trim() && !line.includes('workdir:') && !line.includes('model:')) {
-                foundAnalysis = true;
-                cleanAnalysis += line + '\n';
-              } else if (foundAnalysis && line.trim() === '') {
-                cleanAnalysis += '\n';
-              }
-            }
+            // Check if this needs changes
+            const needsPR = cleanAnalysis.includes('CHANGE_NEEDED:yes');
 
-            // Fallback if no clean analysis found
-            if (!cleanAnalysis.trim()) {
-              cleanAnalysis = rawAnalysis;
-            }
-
-            // Check if this is a significant change
-            const needsPR = cleanAnalysis.includes('SIGNIFICANT_CHANGE: true');
-
-            // Clean up the SIGNIFICANT_CHANGE marker
-            cleanAnalysis = cleanAnalysis.replace(/SIGNIFICANT_CHANGE: (true|false)/g, '').trim();
+            // Clean up the CHANGE_NEEDED marker
+            cleanAnalysis = cleanAnalysis.replace(/CHANGE_NEEDED:(yes|no)/g, '').trim();
 
             // Handle different event types
             let issueNumber;
