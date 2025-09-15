@@ -28,52 +28,101 @@ jobs:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         with:
           script: |
-            const issueNumber = context.issue.number;
-            const issueTitle = context.payload.issue.title;
-            const issueBody = context.payload.issue.body || '';
+            // Debug: Log full context to understand structure
+            console.log('Event Name:', context.eventName);
+            console.log('Payload keys:', Object.keys(context.payload));
 
-            // Call Gemini API
-            const response = await fetch(
-              'https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=' + process.env.GEMINI_API_KEY,
-              {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                  contents: [{
-                    parts: [{
-                      text: `Analyze this GitHub issue for a React TypeScript JSON navigator app:
+            // Handle different event types
+            let issue;
+            let issueNumber;
 
-                      Title: ${issueTitle}
-                      Body: ${issueBody}
-
-                      Provide:
-                      1. Issue type (bug/feature/question)
-                      2. Potential solution approach
-                      3. Confidence level (low/medium/high)
-                      4. Files likely needing changes
-
-                      Keep response concise and actionable.`
-                    }]
-                  }]
-                })
-              }
-            );
-
-            const data = await response.json();
-            console.log('Gemini API Response:', JSON.stringify(data, null, 2));
-
-            // Check for errors in the response
-            if (!response.ok || !data.candidates || data.candidates.length === 0) {
-              console.error('Gemini API Error:', data);
-              throw new Error('Failed to get analysis from Gemini');
+            if (context.eventName === 'issues') {
+              issue = context.payload.issue;
+              issueNumber = issue.number;
+            } else if (context.eventName === 'issue_comment') {
+              issue = context.payload.issue;
+              issueNumber = issue.number;
+            } else {
+              console.log('Unsupported event type:', context.eventName);
+              return;
             }
 
-            const analysis = data.candidates[0].content.parts[0].text;
+            if (!issue) {
+              console.log('No issue found in payload');
+              return;
+            }
 
-            // Post analysis as comment
-            await github.rest.issues.createComment({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: issueNumber,
-              body: `## 🤖 AI Analysis (Gemini)\n\n${analysis}\n\n---\n*This is an automated analysis. A human developer will review and implement the fix.*`
-            });
+            const issueTitle = issue.title || 'No title';
+            const issueBody = issue.body || 'No description provided';
+
+            console.log('Processing issue:', issueNumber, issueTitle);
+
+            try {
+              // Call Gemini API
+              const response = await fetch(
+                'https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=' + process.env.GEMINI_API_KEY,
+                {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    contents: [{
+                      parts: [{
+                        text: `Analyze this GitHub issue for a React TypeScript JSON navigator app:
+
+                        Title: ${issueTitle}
+                        Body: ${issueBody}
+
+                        Provide:
+                        1. Issue type (bug/feature/question)
+                        2. Potential solution approach
+                        3. Confidence level (low/medium/high)
+                        4. Files likely needing changes
+
+                        Keep response concise and actionable.`
+                      }]
+                    }]
+                  })
+                }
+              );
+
+              const data = await response.json();
+              console.log('Gemini API Response:', JSON.stringify(data, null, 2));
+
+              // Check for errors in the response
+              if (!response.ok) {
+                console.error('HTTP Error:', response.status, response.statusText);
+                console.error('Response data:', data);
+                throw new Error(`Gemini API HTTP error: ${response.status}`);
+              }
+
+              if (!data.candidates || data.candidates.length === 0) {
+                console.error('No candidates in response:', data);
+                throw new Error('Gemini API returned no candidates');
+              }
+
+              if (!data.candidates[0].content || !data.candidates[0].content.parts || data.candidates[0].content.parts.length === 0) {
+                console.error('Invalid response structure:', data.candidates[0]);
+                throw new Error('Invalid response structure from Gemini API');
+              }
+
+              const analysis = data.candidates[0].content.parts[0].text;
+
+              // Post analysis as comment
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issueNumber,
+                body: `## 🤖 AI Analysis (Gemini)\n\n${analysis}\n\n---\n*This is an automated analysis. A human developer will review and implement the fix.*`
+              });
+
+            } catch (error) {
+              console.error('Error during analysis:', error);
+
+              // Post error comment
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issueNumber,
+                body: `## 🤖 AI Analysis Failed\n\nI encountered an error while analyzing this issue:\n\`\`\`\n${error.message}\n\`\`\`\n\nPlease check the GitHub Actions logs for more details.`
+              });
+            }
