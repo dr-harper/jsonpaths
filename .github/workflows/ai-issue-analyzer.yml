@@ -1,4 +1,4 @@
-name: AI Issue Analyzer (Gemini)
+name: AI Issue Analyzer (Codex)
 
 on:
   issues:
@@ -22,107 +22,102 @@ jobs:
         with:
           node-version: '18'
 
-      - name: Analyze Issue with Gemini
-        uses: actions/github-script@v7
+      - name: Install and Setup Codex
         env:
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          CODEX_AUTH_JSON: ${{ secrets.CODEX_AUTH_JSON }}
+        run: |
+          # Install Codex
+          npm install -g @openai/codex
+
+          # Create .codex directory and auth.json
+          mkdir -p ~/.codex
+          echo "$CODEX_AUTH_JSON" > ~/.codex/auth.json
+
+          # Verify installation
+          codex --version
+
+      - name: Analyze Issue with Codex
+        run: |
+          # Create a temporary analysis prompt file
+          cat > issue_analysis.md << 'EOF'
+          # GitHub Issue Analysis Request
+
+          You are analyzing a GitHub issue for a React TypeScript JSON navigator application.
+
+          ## Repository Context
+          - **Tech Stack**: React 19, TypeScript, Vite, Tailwind CSS, Bootstrap 5
+          - **Purpose**: JSON path navigation and multi-language code generation
+          - **Key Features**: JSON tree visualization, path extraction, AI assistance, diff checker
+
+          ## Issue Details
+          - **Title**: ${{ github.event.issue.title || 'Issue from comment' }}
+          - **Body**: ${{ github.event.issue.body || 'No description provided' }}
+          - **Number**: ${{ github.event.issue.number }}
+          - **Author**: ${{ github.event.issue.user.login || github.event.comment.user.login }}
+
+          ## Analysis Required
+          Please provide:
+          1. **Issue Type**: (bug/enhancement/question/documentation)
+          2. **Severity**: (low/medium/high/critical)
+          3. **Root Cause Analysis**: What's likely causing this issue?
+          4. **Solution Approach**: Step-by-step fix recommendation
+          5. **Files to Modify**: Specific files that need changes
+          6. **Code Changes**: Actual code snippets if needed
+          7. **Testing Strategy**: How to verify the fix works
+          8. **Confidence Level**: (low/medium/high) - how confident are you in this analysis?
+
+          Keep the analysis practical and actionable for a developer to implement.
+          EOF
+
+          # Run Codex analysis
+          echo "🤖 Starting Codex analysis..."
+          codex exec --full-auto "Analyze the GitHub issue described in issue_analysis.md and provide a comprehensive technical analysis and solution recommendation" > codex_analysis.txt 2>&1
+
+          # Check if analysis was successful
+          if [ $? -eq 0 ] && [ -s codex_analysis.txt ]; then
+            echo "✅ Codex analysis completed successfully"
+            cat codex_analysis.txt
+          else
+            echo "❌ Codex analysis failed"
+            cat codex_analysis.txt
+            exit 1
+          fi
+
+      - name: Post Analysis Comment
+        uses: actions/github-script@v7
         with:
           script: |
-            // Debug: Log full context to understand structure
-            console.log('Event Name:', context.eventName);
-            console.log('Payload keys:', Object.keys(context.payload));
+            const fs = require('fs');
+
+            // Read the Codex analysis
+            let analysis;
+            try {
+              analysis = fs.readFileSync('codex_analysis.txt', 'utf8');
+            } catch (error) {
+              console.error('Failed to read analysis file:', error);
+              analysis = '❌ **Analysis Failed**: Could not read Codex output file.';
+            }
 
             // Handle different event types
-            let issue;
             let issueNumber;
-
             if (context.eventName === 'issues') {
-              issue = context.payload.issue;
-              issueNumber = issue.number;
+              issueNumber = context.payload.issue.number;
             } else if (context.eventName === 'issue_comment') {
-              issue = context.payload.issue;
-              issueNumber = issue.number;
+              issueNumber = context.payload.issue.number;
             } else {
               console.log('Unsupported event type:', context.eventName);
               return;
             }
 
-            if (!issue) {
-              console.log('No issue found in payload');
-              return;
-            }
+            // Post analysis as comment
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: issueNumber,
+              body: `## 🤖 AI Analysis (OpenAI Codex)
 
-            const issueTitle = issue.title || 'No title';
-            const issueBody = issue.body || 'No description provided';
+${analysis}
 
-            console.log('Processing issue:', issueNumber, issueTitle);
-
-            try {
-              // Call Gemini API
-              const response = await fetch(
-                'https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=' + process.env.GEMINI_API_KEY,
-                {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({
-                    contents: [{
-                      parts: [{
-                        text: `Analyze this GitHub issue for a React TypeScript JSON navigator app:
-
-                        Title: ${issueTitle}
-                        Body: ${issueBody}
-
-                        Provide:
-                        1. Issue type (bug/feature/question)
-                        2. Potential solution approach
-                        3. Confidence level (low/medium/high)
-                        4. Files likely needing changes
-
-                        Keep response concise and actionable.`
-                      }]
-                    }]
-                  })
-                }
-              );
-
-              const data = await response.json();
-              console.log('Gemini API Response:', JSON.stringify(data, null, 2));
-
-              // Check for errors in the response
-              if (!response.ok) {
-                console.error('HTTP Error:', response.status, response.statusText);
-                console.error('Response data:', data);
-                throw new Error(`Gemini API HTTP error: ${response.status}`);
-              }
-
-              if (!data.candidates || data.candidates.length === 0) {
-                console.error('No candidates in response:', data);
-                throw new Error('Gemini API returned no candidates');
-              }
-
-              if (!data.candidates[0].content || !data.candidates[0].content.parts || data.candidates[0].content.parts.length === 0) {
-                console.error('Invalid response structure:', data.candidates[0]);
-                throw new Error('Invalid response structure from Gemini API');
-              }
-
-              const analysis = data.candidates[0].content.parts[0].text;
-
-              // Post analysis as comment
-              await github.rest.issues.createComment({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                issue_number: issueNumber,
-                body: `## 🤖 AI Analysis (Gemini)\n\n${analysis}\n\n---\n*This is an automated analysis. A human developer will review and implement the fix.*`
-              });
-
-            } catch (error) {
-              console.error('Error during analysis:', error);
-
-              // Post error comment
-              await github.rest.issues.createComment({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                issue_number: issueNumber,
-                body: `## 🤖 AI Analysis Failed\n\nI encountered an error while analyzing this issue:\n\`\`\`\n${error.message}\n\`\`\`\n\nPlease check the GitHub Actions logs for more details.`
-              });
-            }
+---
+*This analysis was generated by OpenAI Codex. Please review and validate before implementing any suggested changes.*`
+            });
