@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import LanguageExamples from './components/LanguageExamples';
 import JsonTreeView from './components/JsonTreeView';
 
@@ -17,6 +17,29 @@ function App() {
   const [error, setError] = useState<string>('');
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [viewMode, setViewMode] = useState<'tree' | 'compact' | 'raw'>('tree');
+  const [darkMode, setDarkMode] = useState<boolean>(() => {
+    const saved = localStorage.getItem('darkMode');
+    return saved ? JSON.parse(saved) : false;
+  });
+
+  useEffect(() => {
+    const lightTheme = document.getElementById('bootstrap-theme') as HTMLLinkElement;
+    const darkTheme = document.getElementById('bootstrap-theme-dark') as HTMLLinkElement;
+
+    if (darkMode) {
+      lightTheme.disabled = true;
+      darkTheme.disabled = false;
+      document.documentElement.setAttribute('data-bs-theme', 'dark');
+      document.body.classList.add('bg-dark', 'text-light');
+    } else {
+      lightTheme.disabled = false;
+      darkTheme.disabled = true;
+      document.documentElement.removeAttribute('data-bs-theme');
+      document.body.classList.remove('bg-dark', 'text-light');
+    }
+
+    localStorage.setItem('darkMode', JSON.stringify(darkMode));
+  }, [darkMode]);
 
   const handleJsonChange = (value: string) => {
     setJsonInput(value);
@@ -136,7 +159,7 @@ function App() {
   };
 
   return (
-    <div className="d-flex flex-column vh-100 bg-light">
+    <div className={`d-flex flex-column vh-100 ${darkMode ? 'bg-dark' : 'bg-light'}`}>
       {/* Bootstrap Navbar */}
       <nav className="navbar navbar-expand-lg navbar-dark bg-primary">
         <div className="container-fluid">
@@ -144,7 +167,21 @@ function App() {
             <i className="bi bi-braces me-2"></i>
             JSON Path Navigator
           </a>
-          <span className="badge bg-light text-primary">v1.0.0</span>
+          <div className="d-flex align-items-center gap-2">
+            <button
+              onClick={() => setDarkMode(!darkMode)}
+              className="btn btn-sm btn-outline-light rounded-circle p-0"
+              style={{ width: '32px', height: '32px' }}
+              title={darkMode ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
+            >
+              {darkMode ? (
+                <i className="bi bi-sun-fill"></i>
+              ) : (
+                <i className="bi bi-moon-fill"></i>
+              )}
+            </button>
+            <span className={`badge ${darkMode ? 'bg-dark text-light' : 'bg-light text-primary'}`}>v1.0.0</span>
+          </div>
         </div>
       </nav>
 
@@ -155,7 +192,7 @@ function App() {
             {/* JSON Input Card */}
             <div className="col-12 col-md-6 col-lg-4 mb-3 mb-lg-0 d-flex">
               <div className="card w-100 shadow-sm d-flex flex-column">
-                <div className="card-header bg-white">
+                <div className={`card-header ${darkMode ? 'bg-dark' : 'bg-white'}`}>
                   <div className="d-flex justify-content-between align-items-center">
                     <h6 className="mb-0 fw-bold">
                       <i className="bi bi-code-square me-2 text-primary"></i>
@@ -207,7 +244,7 @@ function App() {
             {/* Structure View */}
             <div className="col-12 col-md-6 col-lg-4 mb-3 mb-lg-0 d-flex">
               <div className="card w-100 shadow-sm d-flex flex-column">
-                <div className="card-header bg-white">
+                <div className={`card-header ${darkMode ? 'bg-dark' : 'bg-white'}`}>
                   <div className="d-flex justify-content-between align-items-center">
                     <h6 className="mb-0 fw-bold">
                       <i className="bi bi-diagram-3 me-2 text-primary"></i>
@@ -284,7 +321,7 @@ function App() {
       </main>
 
       {/* Footer */}
-      <footer className="bg-white border-top py-3">
+      <footer className={`${darkMode ? 'bg-dark' : 'bg-white'} border-top py-3`}>
         <div className="container-fluid">
           <div className="d-flex justify-content-between align-items-center">
             <small className="text-muted">© 2024 JSON Path Navigator</small>

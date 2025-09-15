@@ -1,0 +1,113 @@
+/* Dark mode enhancements */
+[data-bs-theme="dark"] {
+  --bs-body-bg: #212529;
+  --bs-card-bg: #2b3035;
+  --bs-border-color: #495057;
+}
+
+[data-bs-theme="dark"] .card {
+  background-color: var(--bs-card-bg) !important;
+  border-color: var(--bs-border-color) !important;
+}
+
+[data-bs-theme="dark"] .card-header {
+  background-color: #1a1d20 !important;
+  border-color: var(--bs-border-color) !important;
+  color: #f8f9fa !important;
+}
+
+[data-bs-theme="dark"] .card-header h6,
+[data-bs-theme="dark"] .card-header .fw-bold {
+  color: #f8f9fa !important;
+}
+
+[data-bs-theme="dark"] .form-control,
+[data-bs-theme="dark"] .form-select {
+  background-color: #1a1d20 !important;
+  border-color: var(--bs-border-color) !important;
+  color: #f8f9fa !important;
+}
+
+[data-bs-theme="dark"] .form-control:focus,
+[data-bs-theme="dark"] .form-select:focus {
+  background-color: #1a1d20 !important;
+  border-color: #0d6efd !important;
+  color: #f8f9fa !important;
+}
+
+[data-bs-theme="dark"] .bg-light {
+  background-color: #2b3035 !important;
+}
+
+[data-bs-theme="dark"] .text-muted {
+  color: #adb5bd !important;
+}
+
+[data-bs-theme="dark"] .border {
+  border-color: var(--bs-border-color) !important;
+}
+
+[data-bs-theme="dark"] .bg-white {
+  background-color: #1a1d20 !important;
+}
+
+[data-bs-theme="dark"] .alert-success {
+  background-color: #0f3a24;
+  border-color: #0f5132;
+  color: #75b798;
+}
+
+[data-bs-theme="dark"] .alert-danger {
+  background-color: #3a0f0f;
+  border-color: #842029;
+  color: #ea868f;
+}
+
+[data-bs-theme="dark"] .input-group-text {
+  background-color: #1a1d20 !important;
+  border-color: var(--bs-border-color) !important;
+  color: #f8f9fa !important;
+}
+
+[data-bs-theme="dark"] code {
+  color: #66d9ef;
+  background-color: rgba(255, 255, 255, 0.05);
+  padding: 0.125rem 0.25rem;
+  border-radius: 0.25rem;
+}
+
+[data-bs-theme="dark"] .bg-light code {
+  background-color: transparent;
+  padding: 0;
+}
+
+/* Ensure body has dark background */
+body.bg-dark {
+  background-color: #212529 !important;
+}
+
+/* Fix text colors in dark mode */
+[data-bs-theme="dark"] .text-dark {
+  color: #f8f9fa !important;
+}
+
+[data-bs-theme="dark"] .btn-outline-secondary {
+  color: #adb5bd;
+  border-color: #6c757d;
+}
+
+[data-bs-theme="dark"] .btn-outline-secondary:hover {
+  color: #fff;
+  background-color: #6c757d;
+  border-color: #6c757d;
+}
+
+/* Ensure all card text is light in dark mode */
+[data-bs-theme="dark"] .card {
+  color: #f8f9fa !important;
+}
+
+/* Fix empty state text colors */
+[data-bs-theme="dark"] .text-center.text-muted {
+  color: #adb5bd !important;
+}
