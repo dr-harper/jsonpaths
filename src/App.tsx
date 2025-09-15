@@ -3,6 +3,7 @@ import LanguageExamples from './components/LanguageExamples';
 import JsonTreeView from './components/JsonTreeView';
 import AiAssistant from './components/AiAssistant';
 import DocumentationModal from './components/DocumentationModal';
+import DiffChecker from './components/DiffChecker';
 
 type JsonData =
   | null
@@ -30,6 +31,13 @@ function App() {
   const [showLanguageSettings, setShowLanguageSettings] = useState<boolean>(false);
   const [textareaRef, setTextareaRef] = useState<HTMLTextAreaElement | null>(null);
   const [lineNumbersRef, setLineNumbersRef] = useState<HTMLDivElement | null>(null);
+  // Get initial tab from URL hash
+  const getInitialTab = (): 'explorer' | 'diff' => {
+    const hash = window.location.hash.slice(1);
+    return hash === 'diff' ? 'diff' : 'explorer';
+  };
+
+  const [activeTab, setActiveTab] = useState<'explorer' | 'diff'>(getInitialTab());
 
   // Helper function to create language object with getExample function
   const createLanguageObject = (id: string, name: string, icon: string) => {
@@ -92,6 +100,17 @@ function App() {
       getExample: (path: string[]) => generatePath(path, id)
     };
   };
+
+  // Handle browser back/forward navigation
+  useEffect(() => {
+    const handleHashChange = () => {
+      const hash = window.location.hash.slice(1);
+      setActiveTab(hash === 'diff' ? 'diff' : 'explorer');
+    };
+
+    window.addEventListener('hashchange', handleHashChange);
+    return () => window.removeEventListener('hashchange', handleHashChange);
+  }, []);
 
   // Initialize language preferences
   useEffect(() => {
@@ -362,6 +381,33 @@ function App() {
               </small>
             </div>
           </a>
+
+          {/* Tab Navigation */}
+          <div className="d-flex align-items-center mx-auto">
+            <div className="btn-group" role="group">
+              <button
+                onClick={() => {
+                  setActiveTab('explorer');
+                  window.location.hash = 'explorer';
+                }}
+                className={`btn ${activeTab === 'explorer' ? 'btn-light' : 'btn-outline-light'}`}
+              >
+                <i className="bi bi-diagram-3 me-2"></i>
+                Explorer
+              </button>
+              <button
+                onClick={() => {
+                  setActiveTab('diff');
+                  window.location.hash = 'diff';
+                }}
+                className={`btn ${activeTab === 'diff' ? 'btn-light' : 'btn-outline-light'}`}
+              >
+                <i className="bi bi-file-diff me-2"></i>
+                Diff Checker
+              </button>
+            </div>
+          </div>
+
           <div className="d-flex align-items-center gap-2">
             <button
               onClick={() => setShowDocumentation(true)}
@@ -398,8 +444,9 @@ function App() {
 
       {/* Main Content */}
       <main className="flex-fill d-flex overflow-auto">
-        <div className="container-fluid p-3 d-flex">
-          <div className="row g-3 flex-fill">
+        {activeTab === 'explorer' ? (
+          <div className="container-fluid p-3 d-flex">
+            <div className="row g-3 flex-fill">
             {/* JSON Input Card */}
             <div className="col-12 col-md-6 col-lg-3 mb-3 mb-lg-0 d-flex">
               <div className="card w-100 shadow-sm d-flex flex-column" style={{ height: 'calc(100vh - 160px)' }}>
@@ -602,6 +649,9 @@ function App() {
             </div>
           </div>
         </div>
+        ) : (
+          <DiffChecker darkMode={darkMode} />
+        )}
       </main>
 
       {/* Footer */}
