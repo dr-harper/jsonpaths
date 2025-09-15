@@ -111,3 +111,27 @@ body.bg-dark {
 [data-bs-theme="dark"] .text-center.text-muted {
   color: #adb5bd !important;
 }
+
+/* JSONPath Query component styles */
+[data-bs-theme="dark"] details summary {
+  color: #adb5bd !important;
+}
+
+[data-bs-theme="dark"] details .bg-light {
+  background-color: #2b3035 !important;
+}
+
+[data-bs-theme="dark"] pre {
+  color: #f8f9fa;
+  background-color: transparent;
+}
+
+/* AI Assistant dark mode styles */
+[data-bs-theme="dark"] .spinner-border {
+  color: #0d6efd !important;
+}
+
+[data-bs-theme="dark"] .chat-message-assistant {
+  background-color: #2b3035 !important;
+  border-color: var(--bs-border-color) !important;
+}

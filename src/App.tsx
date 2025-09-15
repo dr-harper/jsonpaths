@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
 import LanguageExamples from './components/LanguageExamples';
 import JsonTreeView from './components/JsonTreeView';
+import AiAssistant from './components/AiAssistant';
+import DocumentationModal from './components/DocumentationModal';
 
 type JsonData =
   | null
@@ -15,12 +17,125 @@ function App() {
   const [jsonData, setJsonData] = useState<JsonData | null>(null);
   const [selectedPath, setSelectedPath] = useState<string[]>([]);
   const [error, setError] = useState<string>('');
+  const [errorLine, setErrorLine] = useState<number | null>(null);
   const [searchTerm, setSearchTerm] = useState<string>('');
-  const [viewMode, setViewMode] = useState<'tree' | 'compact' | 'raw'>('tree');
+  const [filterMode, setFilterMode] = useState<boolean>(true);
+  const [viewMode] = useState<'tree' | 'compact' | 'raw'>('tree');
+  const [selectedLanguages, setSelectedLanguages] = useState<Array<{id: string, name: string, icon: string, getExample: (path: string[]) => string}>>([]);
   const [darkMode, setDarkMode] = useState<boolean>(() => {
     const saved = localStorage.getItem('darkMode');
     return saved ? JSON.parse(saved) : false;
   });
+  const [showDocumentation, setShowDocumentation] = useState<boolean>(false);
+  const [showLanguageSettings, setShowLanguageSettings] = useState<boolean>(false);
+  const [textareaRef, setTextareaRef] = useState<HTMLTextAreaElement | null>(null);
+  const [lineNumbersRef, setLineNumbersRef] = useState<HTMLDivElement | null>(null);
+
+  // Helper function to create language object with getExample function
+  const createLanguageObject = (id: string, name: string, icon: string) => {
+    const generatePath = (pathArray: string[], language: string): string => {
+      if (pathArray.length === 0) {
+        switch(language) {
+          case 'python': return 'data';
+          case 'javascript': return 'data';
+          case 'ruby': return 'data';
+          case 'php': return '$data';
+          case 'java': return 'data';
+          case 'csharp': return 'data';
+          case 'go': return 'data';
+          case 'rust': return 'data';
+          case 'swift': return 'data';
+          case 'kotlin': return 'data';
+          default: return 'data';
+        }
+      }
+
+      switch(language) {
+        case 'python':
+          return pathArray.reduce((acc, key) => {
+            if (/^\d+$/.test(key)) {
+              return `${acc}[${key}]`;
+            } else {
+              return `${acc}['${key}']`;
+            }
+          }, 'data');
+
+        case 'javascript':
+          return pathArray.reduce((acc, key) => {
+            if (/^\d+$/.test(key)) {
+              return `${acc}[${key}]`;
+            } else if (/^[a-zA-Z_$][a-zA-Z0-9_$]*$/.test(key)) {
+              return `${acc}.${key}`;
+            } else {
+              return `${acc}['${key}']`;
+            }
+          }, 'data');
+
+        case 'swift':
+          return pathArray.reduce((acc, key) => {
+            if (/^\d+$/.test(key)) {
+              return `${acc}[${key}]`;
+            } else {
+              return `${acc}["${key}"]`;
+            }
+          }, 'data');
+
+        default:
+          return `// ${language} path access: ${pathArray.join('.')}`;
+      }
+    };
+
+    return {
+      id,
+      name,
+      icon,
+      getExample: (path: string[]) => generatePath(path, id)
+    };
+  };
+
+  // Initialize language preferences
+  useEffect(() => {
+    // Load from localStorage or default to Python and Swift
+    try {
+      const saved = localStorage.getItem('selectedLanguages');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        // Reconstruct with getExample functions
+        const reconstructed = parsed.map((lang: any) => createLanguageObject(lang.id, lang.name, lang.icon));
+        setSelectedLanguages(reconstructed);
+        return;
+      }
+    } catch (error) {
+      console.error('Failed to load language preferences:', error);
+    }
+
+    // Default to Python and Swift
+    const defaultLanguages = [
+      createLanguageObject('python', 'Python', '🐍'),
+      createLanguageObject('swift', 'Swift', '🐦')
+    ];
+    setSelectedLanguages(defaultLanguages);
+
+    // Save defaults to localStorage
+    try {
+      const toSave = defaultLanguages.map(lang => ({ id: lang.id, name: lang.name, icon: lang.icon }));
+      localStorage.setItem('selectedLanguages', JSON.stringify(toSave));
+    } catch (error) {
+      console.error('Failed to save default language preferences:', error);
+    }
+  }, []);
+
+  // Save language preferences to localStorage whenever they change
+  useEffect(() => {
+    if (selectedLanguages.length > 0) {
+      try {
+        const toSave = selectedLanguages.map(lang => ({ id: lang.id, name: lang.name, icon: lang.icon }));
+        localStorage.setItem('selectedLanguages', JSON.stringify(toSave));
+      } catch (error) {
+        console.error('Failed to save language preferences:', error);
+      }
+    }
+  }, [selectedLanguages]);
 
   useEffect(() => {
     const lightTheme = document.getElementById('bootstrap-theme') as HTMLLinkElement;
@@ -41,11 +156,19 @@ function App() {
     localStorage.setItem('darkMode', JSON.stringify(darkMode));
   }, [darkMode]);
 
+  // Sync scroll between textarea and line numbers
+  const handleScroll = () => {
+    if (textareaRef && lineNumbersRef) {
+      lineNumbersRef.scrollTop = textareaRef.scrollTop;
+    }
+  };
+
   const handleJsonChange = (value: string) => {
     setJsonInput(value);
     if (!value.trim()) {
       setJsonData(null);
       setError('');
+      setErrorLine(null);
       return;
     }
 
@@ -53,8 +176,33 @@ function App() {
       const parsed = JSON.parse(value);
       setJsonData(parsed);
       setError('');
+      setErrorLine(null);
     } catch (e) {
-      setError('Invalid JSON format');
+      let errorMessage = 'Invalid JSON format';
+
+      if (e instanceof SyntaxError && e.message) {
+        // Try to extract position information from the error message
+        const positionMatch = e.message.match(/position (\d+)/);
+        const lineMatch = e.message.match(/line (\d+)/);
+
+        if (positionMatch) {
+          const position = parseInt(positionMatch[1]);
+          const lines = value.substring(0, position).split('\n');
+          const lineNumber = lines.length;
+          const columnNumber = lines[lines.length - 1].length + 1;
+          errorMessage = `JSON syntax error at line ${lineNumber}, column ${columnNumber}: ${e.message.split(' at ')[0]}`;
+          setErrorLine(lineNumber);
+        } else if (lineMatch) {
+          const lineNumber = parseInt(lineMatch[1]);
+          errorMessage = `JSON syntax error at ${e.message}`;
+          setErrorLine(lineNumber);
+        } else {
+          errorMessage = `JSON syntax error: ${e.message}`;
+          setErrorLine(null);
+        }
+      }
+
+      setError(errorMessage);
       setJsonData(null);
     }
   };
@@ -204,10 +352,34 @@ function App() {
       <nav className="navbar navbar-expand-lg navbar-dark bg-primary">
         <div className="container-fluid">
           <a className="navbar-brand fw-bold" href="#">
-            <i className="bi bi-braces me-2"></i>
-            JSON Path Navigator
+            <div className="d-flex flex-column">
+              <div>
+                <i className="bi bi-braces me-2"></i>
+                JSON Assistant
+              </div>
+              <small className="text-light opacity-75" style={{ fontSize: '0.75rem', fontWeight: 'normal' }}>
+                Explore, query, and extract data with AI assistance
+              </small>
+            </div>
           </a>
           <div className="d-flex align-items-center gap-2">
+            <button
+              onClick={() => setShowDocumentation(true)}
+              className="btn btn-sm btn-outline-light rounded-circle p-0"
+              style={{ width: '32px', height: '32px' }}
+              title="Documentation & Help"
+            >
+              <i className="bi bi-question-circle-fill"></i>
+            </button>
+            <button
+              onClick={() => setShowLanguageSettings(!showLanguageSettings)}
+              className="btn btn-sm btn-light text-primary rounded-pill px-2 d-flex align-items-center"
+              style={{ height: '32px' }}
+              title={`${selectedLanguages.length} language${selectedLanguages.length !== 1 ? 's' : ''} selected for code examples`}
+            >
+              <i className="bi bi-code-slash me-1"></i>
+              <span className="badge bg-primary rounded-pill">{selectedLanguages.length}</span>
+            </button>
             <button
               onClick={() => setDarkMode(!darkMode)}
               className="btn btn-sm btn-outline-light rounded-circle p-0"
@@ -220,7 +392,6 @@ function App() {
                 <i className="bi bi-moon-fill"></i>
               )}
             </button>
-            <span className={`badge ${darkMode ? 'bg-dark text-light' : 'bg-light text-primary'}`}>v1.0.0</span>
           </div>
         </div>
       </nav>
@@ -230,9 +401,9 @@ function App() {
         <div className="container-fluid p-3 d-flex">
           <div className="row g-3 flex-fill">
             {/* JSON Input Card */}
-            <div className="col-12 col-md-6 col-lg-4 mb-3 mb-lg-0 d-flex">
-              <div className="card w-100 shadow-sm d-flex flex-column">
-                <div className={`card-header ${darkMode ? 'bg-dark' : 'bg-white'}`}>
+            <div className="col-12 col-md-6 col-lg-3 mb-3 mb-lg-0 d-flex">
+              <div className="card w-100 shadow-sm d-flex flex-column" style={{ height: 'calc(100vh - 160px)' }}>
+                <div className="card-header">
                   <div className="d-flex justify-content-between align-items-center">
                     <h6 className="mb-0 fw-bold">
                       <i className="bi bi-code-square me-2 text-primary"></i>
@@ -259,7 +430,7 @@ function App() {
                       </label>
                       <button
                         onClick={() => handleJsonChange('')}
-                        className="btn btn-outline-secondary"
+                        className="btn btn-outline-primary"
                         title="Clear all content"
                       >
                         <i className="bi bi-x-lg me-1"></i>
@@ -268,27 +439,71 @@ function App() {
                     </div>
                   </div>
                 </div>
-                <div className="card-body d-flex flex-column overflow-hidden">
+                <div className="card-body d-flex flex-column overflow-hidden flex-fill">
+                  <div className="d-flex border rounded overflow-hidden flex-fill">
+                    {/* Line numbers column */}
+                    <div
+                      ref={setLineNumbersRef}
+                      className="text-muted text-end pe-2 py-2 border-end"
+                      style={{
+                        minWidth: '40px',
+                        fontSize: '0.875rem',
+                        lineHeight: '1.4',
+                        fontFamily: 'monospace',
+                        backgroundColor: 'rgba(0,0,0,0.03)',
+                        height: '100%',
+                        overflowY: 'hidden',
+                        overflowX: 'hidden'
+                      }}
+                    >
+                      {(jsonInput || ' ').split('\n').map((_, index) => (
+                        <div
+                          key={index}
+                          className="d-flex align-items-center justify-content-end"
+                          style={{
+                            height: '1.4rem',
+                            backgroundColor: errorLine === index + 1 ? 'rgba(220, 53, 69, 0.1)' : 'transparent'
+                          }}
+                        >
+                          {errorLine === index + 1 && (
+                            <i className="bi bi-exclamation-triangle-fill text-danger me-1" style={{ fontSize: '0.7rem' }}></i>
+                          )}
+                          <span>{index + 1}</span>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Text input area */}
+                    <textarea
+                      ref={setTextareaRef}
+                      value={jsonInput}
+                      onChange={(e) => handleJsonChange(e.target.value)}
+                      onScroll={handleScroll}
+                      placeholder="Paste or type your JSON here..."
+                      className="flex-fill border-0 font-monospace h-100"
+                      style={{
+                        fontSize: '0.875rem',
+                        lineHeight: '1.4',
+                        padding: '0.5rem',
+                        resize: 'none',
+                        outline: 'none',
+                        backgroundColor: 'transparent'
+                      }}
+                      spellCheck={false}
+                    />
+                  </div>
                   {error && (
-                    <div className="alert alert-danger py-2 mb-3 d-flex align-items-center" role="alert">
+                    <div className="alert alert-danger py-2 mt-3 mb-0 d-flex align-items-center" role="alert">
                       <i className="bi bi-exclamation-triangle-fill me-2"></i>
                       <small>{error}</small>
                     </div>
                   )}
                   {!error && jsonInput && (
-                    <div className="alert alert-success py-2 mb-3 d-flex align-items-center" role="alert">
+                    <div className="alert alert-success py-2 mt-3 mb-0 d-flex align-items-center" role="alert">
                       <i className="bi bi-check-circle-fill me-2"></i>
                       <small>Valid JSON</small>
                     </div>
                   )}
-                  <textarea
-                    value={jsonInput}
-                    onChange={(e) => handleJsonChange(e.target.value)}
-                    placeholder="Paste or type your JSON here..."
-                    className="form-control font-monospace flex-fill"
-                    style={{ fontSize: '0.875rem', minHeight: '300px' }}
-                    spellCheck={false}
-                  />
                 </div>
               </div>
             </div>
@@ -296,7 +511,7 @@ function App() {
             {/* Structure View */}
             <div className="col-12 col-md-6 col-lg-4 mb-3 mb-lg-0 d-flex">
               <div className="card w-100 shadow-sm d-flex flex-column">
-                <div className={`card-header ${darkMode ? 'bg-dark' : 'bg-white'}`}>
+                <div className="card-header">
                   <div className="d-flex justify-content-between align-items-center">
                     <h6 className="mb-0 fw-bold">
                       <i className="bi bi-diagram-3 me-2 text-primary"></i>
@@ -304,7 +519,7 @@ function App() {
                     </h6>
                     <div className="d-flex gap-2">
                       {/* Search input */}
-                      <div className="input-group input-group-sm" style={{ width: '150px' }}>
+                      <div className="input-group input-group-sm" style={{ width: '200px' }}>
                         <input
                           type="text"
                           className="form-control"
@@ -312,45 +527,58 @@ function App() {
                           value={searchTerm}
                           onChange={(e) => setSearchTerm(e.target.value)}
                         />
+                        <button
+                          onClick={() => setFilterMode(!filterMode)}
+                          className={`btn ${filterMode ? 'btn-primary' : 'btn-outline-secondary'}`}
+                          title={filterMode ? 'Show all (disable filter)' : 'Show only matches (enable filter)'}
+                        >
+                          <i className="bi bi-funnel"></i>
+                        </button>
                         <span className="input-group-text">
                           <i className="bi bi-search"></i>
                         </span>
                       </div>
-                      {/* View mode toggle */}
-                      <div className="btn-group btn-group-sm" role="group">
-                        <button
-                          className={`btn ${viewMode === 'tree' ? 'btn-primary' : 'btn-outline-primary'}`}
-                          onClick={() => setViewMode('tree')}
-                          title="Tree View"
-                        >
-                          <i className="bi bi-diagram-3"></i>
-                        </button>
-                        <button
-                          className={`btn ${viewMode === 'compact' ? 'btn-primary' : 'btn-outline-primary'}`}
-                          onClick={() => setViewMode('compact')}
-                          title="Compact View"
-                        >
-                          <i className="bi bi-braces"></i>
-                        </button>
-                        <button
-                          className={`btn ${viewMode === 'raw' ? 'btn-primary' : 'btn-outline-primary'}`}
-                          onClick={() => setViewMode('raw')}
-                          title="Raw JSON"
-                        >
-                          <i className="bi bi-code"></i>
-                        </button>
-                      </div>
                     </div>
                   </div>
                 </div>
-                <div className="card-body overflow-auto">
+                <div className="card-body overflow-hidden d-flex flex-column" style={{ height: 'calc(100vh - 230px)' }}>
                   {jsonData ? (
-                    <JsonTreeView
-                      data={jsonData}
-                      onPathSelect={setSelectedPath}
-                      searchTerm={searchTerm}
-                      viewMode={viewMode}
-                    />
+                    <>
+                      <div className="flex-grow-1 overflow-auto mb-3">
+                        <JsonTreeView
+                          data={jsonData}
+                          onPathSelect={setSelectedPath}
+                          searchTerm={searchTerm}
+                          viewMode={viewMode}
+                          filterMode={filterMode}
+                        />
+                      </div>
+
+                      {/* Language Examples at bottom */}
+                      <div className="border-top pt-3 flex-shrink-0" style={{ maxHeight: '200px', overflow: 'hidden' }}>
+                        {selectedPath.length > 0 ? (
+                          <div>
+                            <small className="text-muted d-block mb-2">
+                              <i className="bi bi-cursor me-1"></i>
+                              Selected: <code>{selectedPath.join('.')}</code>
+                            </small>
+                            <div style={{ maxHeight: '150px', overflow: 'auto' }}>
+                              <LanguageExamples
+                                path={selectedPath}
+                                onLanguagesChange={setSelectedLanguages}
+                                onShowLanguageSettings={() => setShowLanguageSettings(true)}
+                              />
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="text-center text-muted py-3">
+                            <i className="bi bi-hand-index display-6 mb-2"></i>
+                            <p className="mb-1 small">Click any item above</p>
+                            <small>to see code examples for accessing that data</small>
+                          </div>
+                        )}
+                      </div>
+                    </>
                   ) : (
                     <div className="text-center text-muted py-5">
                       <i className="bi bi-inbox display-1 mb-3"></i>
@@ -362,35 +590,167 @@ function App() {
               </div>
             </div>
 
-            {/* Language Examples Panel */}
-            <div className="col-12 col-md-12 col-lg-4 d-flex">
-              <div className="card w-100 shadow-sm d-flex flex-column">
-                <LanguageExamples path={selectedPath} />
-              </div>
+            {/* AI Assistant Panel */}
+            <div className="col-12 col-md-12 col-lg-5 d-flex">
+              <div className="card w-100 shadow-sm d-flex flex-column" style={{ height: 'calc(100vh - 160px)' }}>
+                <AiAssistant
+                  jsonData={jsonData}
+                  selectedLanguages={selectedLanguages}
+                  onShowLanguageSettings={() => setShowLanguageSettings(true)}
+                />
+               </div>
             </div>
           </div>
         </div>
       </main>
 
       {/* Footer */}
-      <footer className={`${darkMode ? 'bg-dark' : 'bg-white'} border-top py-3`}>
+      <footer className={`${darkMode ? 'bg-secondary' : 'bg-light'} border-top py-2`}>
         <div className="container-fluid">
           <div className="d-flex justify-content-between align-items-center">
-            <small className="text-muted">© 2024 JSON Path Navigator</small>
-            <div className="d-flex gap-3">
-              <a href="#" className="text-decoration-none text-muted small">
-                <i className="bi bi-book me-1"></i>Documentation
+            <small className="text-muted">
+              © {new Date().getFullYear()} JSON Assistant by{' '}
+              <a href="https://github.com/dr-harper" className="text-decoration-none text-muted" target="_blank" rel="noopener noreferrer">
+                Mikey Harper
               </a>
+            </small>
+            <div className="d-flex gap-3 align-items-center">
+              <small className="text-muted">v1.0.0</small>
               <a href="https://github.com/dr-harper/jsonpaths" className="text-decoration-none text-muted small" target="_blank" rel="noopener noreferrer">
                 <i className="bi bi-github me-1"></i>GitHub
-              </a>
-              <a href="#" className="text-decoration-none text-muted small">
-                <i className="bi bi-life-preserver me-1"></i>Support
               </a>
             </div>
           </div>
         </div>
       </footer>
+
+      {/* Language Settings Modal */}
+      {showLanguageSettings && (
+        <>
+          {/* Backdrop */}
+          <div
+            className="modal-backdrop fade show"
+            style={{ zIndex: 1040 }}
+            onClick={() => setShowLanguageSettings(false)}
+          ></div>
+
+          {/* Modal */}
+          <div
+            className={`modal fade show d-block ${darkMode ? 'dark-mode' : ''}`}
+            style={{ zIndex: 1050 }}
+            tabIndex={-1}
+            onClick={(e) => {
+              // Close modal if clicking outside the modal content
+              if (e.target === e.currentTarget) {
+                setShowLanguageSettings(false);
+              }
+            }}
+          >
+            <div className="modal-dialog modal-dialog-centered">
+              <div className={`modal-content ${darkMode ? 'bg-dark text-light' : ''}`}>
+                <div className={`modal-header ${darkMode ? 'border-secondary' : ''}`}>
+                  <h5 className={`modal-title ${darkMode ? 'text-light' : ''}`}>
+                    <i className="bi bi-code me-2 text-primary"></i>
+                    Configure Code Example Languages
+                  </h5>
+                  <button
+                    type="button"
+                    className={`btn-close ${darkMode ? 'btn-close-white' : ''}`}
+                    onClick={() => setShowLanguageSettings(false)}
+                    aria-label="Close"
+                  ></button>
+                </div>
+                <div className="modal-body">
+                  <p className={`small mb-3 ${darkMode ? 'text-light opacity-75' : 'text-muted'}`}>
+                    Select which programming languages to show in code examples across the application:
+                  </p>
+                  <div className="row g-3">
+                    {[
+                      { id: 'python', name: 'Python', icon: '🐍' },
+                      { id: 'javascript', name: 'JavaScript', icon: '🟨' },
+                      { id: 'swift', name: 'Swift', icon: '🐦' },
+                      { id: 'ruby', name: 'Ruby', icon: '💎' },
+                      { id: 'php', name: 'PHP', icon: '🐘' },
+                      { id: 'java', name: 'Java', icon: '☕' },
+                      { id: 'csharp', name: 'C#', icon: '🔷' },
+                      { id: 'go', name: 'Go', icon: '🐹' },
+                      { id: 'rust', name: 'Rust', icon: '🦀' },
+                      { id: 'kotlin', name: 'Kotlin', icon: '🎯' }
+                    ].map(lang => {
+                      const isSelected = selectedLanguages.some(selected => selected.id === lang.id);
+                      return (
+                        <div key={lang.id} className="col-6">
+                          <div className={`form-check ${isSelected ? 'text-primary' : ''}`}>
+                            <input
+                              className="form-check-input rounded-0"
+                              type="checkbox"
+                              checked={isSelected}
+                              style={{
+                                borderRadius: '2px',
+                                width: '18px',
+                                height: '18px',
+                                marginTop: '2px',
+                                backgroundColor: darkMode && !isSelected ? '#2b2b2b' : '',
+                                borderColor: darkMode ? '#6c757d' : '#ced4da'
+                              }}
+                              onChange={() => {
+                                const isCurrentlySelected = selectedLanguages.some(selected => selected.id === lang.id);
+                                let newLanguages;
+
+                                if (isCurrentlySelected) {
+                                  // Remove the language
+                                  newLanguages = selectedLanguages.filter(selected => selected.id !== lang.id);
+                                } else {
+                                  // Add the language
+                                  const newLang = createLanguageObject(lang.id, lang.name, lang.icon);
+                                  newLanguages = [...selectedLanguages, newLang];
+                                }
+
+                                setSelectedLanguages(newLanguages);
+                              }}
+                              id={`navbar-lang-${lang.id}`}
+                            />
+                            <label
+                              className={`form-check-label ms-2 ${darkMode ? 'text-light' : ''}`}
+                              htmlFor={`navbar-lang-${lang.id}`}
+                              style={{ cursor: 'pointer' }}
+                            >
+                              <span className="me-2">{lang.icon}</span>
+                              {lang.name}
+                            </label>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <div className={`mt-3 p-2 rounded ${darkMode ? 'bg-secondary bg-opacity-25' : 'bg-light'}`}>
+                    <small className={darkMode ? 'text-light opacity-75' : 'text-muted'}>
+                      <i className="bi bi-info-circle me-1"></i>
+                      <strong>Selected: {selectedLanguages.length}</strong> -
+                      Changes apply to both Structure View and AI Assistant panels.
+                    </small>
+                  </div>
+                </div>
+                <div className={`modal-footer ${darkMode ? 'border-secondary' : ''}`}>
+                  <button
+                    type="button"
+                    className={`btn ${darkMode ? 'btn-outline-secondary' : 'btn-secondary'}`}
+                    onClick={() => setShowLanguageSettings(false)}
+                  >
+                    Close
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* Documentation Modal */}
+      <DocumentationModal
+        isOpen={showDocumentation}
+        onClose={() => setShowDocumentation(false)}
+      />
     </div>
   );
 }

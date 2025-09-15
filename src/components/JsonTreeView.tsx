@@ -13,6 +13,7 @@ interface JsonTreeViewProps {
   onPathSelect: (path: string[]) => void;
   searchTerm?: string;
   viewMode?: 'tree' | 'compact' | 'raw';
+  filterMode?: boolean;
 }
 
 interface TreeNodeProps {
@@ -21,6 +22,7 @@ interface TreeNodeProps {
   level: number;
   onPathSelect: (path: string[]) => void;
   searchTerm?: string;
+  filterMode?: boolean;
   isLast?: boolean;
   parentExpanded?: boolean;
   selectedPath?: string[];
@@ -32,6 +34,7 @@ const TreeNode: React.FC<TreeNodeProps> = ({
   level,
   onPathSelect,
   searchTerm,
+  filterMode = false,
   isLast = false,
   selectedPath = []
 }) => {
@@ -111,6 +114,48 @@ const TreeNode: React.FC<TreeNodeProps> = ({
   const isSelected = JSON.stringify(path) === JSON.stringify(selectedPath);
   const dataType = getDataType(data);
   const isExpandable = dataType === 'object' || dataType === 'array';
+
+  // Check if this node should be visible when filtering
+  const shouldShowNode = (): boolean => {
+    if (!searchTerm || !filterMode) return true;
+
+    // Check if current path matches search term
+    const pathString = path.join('.').toLowerCase();
+    if (pathString.includes(searchTerm.toLowerCase())) return true;
+
+    // Check if current value matches search term
+    if (typeof data === 'string' && data.toLowerCase().includes(searchTerm.toLowerCase())) {
+      return true;
+    }
+
+    // Check if any child contains the search term (recursive check)
+    const hasMatchingChild = (obj: any, currentPath: string[] = []): boolean => {
+      if (typeof obj === 'string' && obj.toLowerCase().includes(searchTerm.toLowerCase())) {
+        return true;
+      }
+      if (typeof obj === 'object' && obj !== null) {
+        if (Array.isArray(obj)) {
+          return obj.some((item, index) =>
+            hasMatchingChild(item, [...currentPath, String(index)])
+          );
+        } else {
+          return Object.entries(obj).some(([key, value]) => {
+            const newPath = [...currentPath, key];
+            const pathStr = newPath.join('.').toLowerCase();
+            return pathStr.includes(searchTerm.toLowerCase()) || hasMatchingChild(value, newPath);
+          });
+        }
+      }
+      return false;
+    };
+
+    return hasMatchingChild(data, path);
+  };
+
+  // Don't render if filtering is on and this node doesn't match
+  if (!shouldShowNode()) {
+    return null;
+  }
 
   // Highlight search matches
   const highlightMatch = (text: string): React.ReactElement => {
@@ -268,6 +313,7 @@ const TreeNode: React.FC<TreeNodeProps> = ({
                 level={level + 1}
                 onPathSelect={onPathSelect}
                 searchTerm={searchTerm}
+                filterMode={filterMode}
                 isLast={index === data.length - 1}
                 selectedPath={selectedPath}
               />
@@ -281,6 +327,7 @@ const TreeNode: React.FC<TreeNodeProps> = ({
                 level={level + 1}
                 onPathSelect={onPathSelect}
                 searchTerm={searchTerm}
+                filterMode={filterMode}
                 isLast={index === arr.length - 1}
                 selectedPath={selectedPath}
               />
@@ -296,7 +343,8 @@ const JsonTreeView: React.FC<JsonTreeViewProps> = ({
   data,
   onPathSelect,
   searchTerm = '',
-  viewMode = 'tree'
+  viewMode = 'tree',
+  filterMode = false
 }) => {
   const [selectedPath, setSelectedPath] = useState<string[]>([]);
 
@@ -365,6 +413,38 @@ const JsonTreeView: React.FC<JsonTreeViewProps> = ({
     );
   }
 
+  // Check if we have any visible nodes when filtering
+  const hasVisibleNodes = (nodeData: JsonData, currentPath: string[] = []): boolean => {
+    if (!searchTerm || !filterMode) return true;
+
+    // Check if current path matches search term
+    const pathString = currentPath.join('.').toLowerCase();
+    if (pathString.includes(searchTerm.toLowerCase())) return true;
+
+    // Check if current value matches search term
+    if (typeof nodeData === 'string' && nodeData.toLowerCase().includes(searchTerm.toLowerCase())) {
+      return true;
+    }
+
+    // Check children recursively
+    if (typeof nodeData === 'object' && nodeData !== null) {
+      if (Array.isArray(nodeData)) {
+        return nodeData.some((item, index) =>
+          hasVisibleNodes(item, [...currentPath, String(index)])
+        );
+      } else {
+        return Object.entries(nodeData).some(([key, value]) => {
+          const newPath = [...currentPath, key];
+          const pathStr = newPath.join('.').toLowerCase();
+          return pathStr.includes(searchTerm.toLowerCase()) || hasVisibleNodes(value, newPath);
+        });
+      }
+    }
+    return false;
+  };
+
+  const showNoMatchesWarning = searchTerm && filterMode && !hasVisibleNodes(data);
+
   // Tree view (default)
   return (
     <div>
@@ -372,17 +452,27 @@ const JsonTreeView: React.FC<JsonTreeViewProps> = ({
       {/* Breadcrumb */}
       {breadcrumb}
 
-      {/* Tree */}
-      <div className="font-monospace" style={{ fontSize: '0.875rem' }}>
-        <TreeNode
-          data={data}
-          path={[]}
-          level={0}
-          onPathSelect={handlePathSelect}
-          searchTerm={searchTerm}
-          selectedPath={selectedPath}
-        />
-      </div>
+      {/* No matches warning */}
+      {showNoMatchesWarning ? (
+        <div className="text-center text-muted py-4">
+          <i className="bi bi-search display-4 mb-3"></i>
+          <p className="mb-2">No matches found for "{searchTerm}"</p>
+          <small>Try a different search term or disable the filter to see all data</small>
+        </div>
+      ) : (
+        /* Tree */
+        <div className="font-monospace" style={{ fontSize: '0.875rem' }}>
+          <TreeNode
+            data={data}
+            path={[]}
+            level={0}
+            onPathSelect={handlePathSelect}
+            searchTerm={searchTerm}
+            filterMode={filterMode}
+            selectedPath={selectedPath}
+          />
+        </div>
+      )}
     </div>
   );
 };
