@@ -19,7 +19,7 @@ function App() {
   const [error, setError] = useState<string>('');
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [filterMode, setFilterMode] = useState<boolean>(true);
-  const [viewMode, setViewMode] = useState<'tree' | 'compact' | 'raw'>('tree');
+  const [viewMode] = useState<'tree' | 'compact' | 'raw'>('tree');
   const [selectedLanguages, setSelectedLanguages] = useState<Array<{id: string, name: string, icon: string, getExample: (path: string[]) => string}>>([]);
   const [darkMode, setDarkMode] = useState<boolean>(() => {
     const saved = localStorage.getItem('darkMode');
@@ -408,10 +408,15 @@ function App() {
       </main>
 
       {/* Footer */}
-      <footer className={`${darkMode ? 'bg-dark' : 'bg-white'} border-top py-2`}>
+      <footer className={`${darkMode ? 'bg-secondary' : 'bg-light'} border-top py-2`}>
         <div className="container-fluid">
           <div className="d-flex justify-content-between align-items-center">
-            <small className="text-muted">© 2024 JSON Assistant</small>
+            <small className="text-muted">
+              © {new Date().getFullYear()} JSON Assistant by{' '}
+              <a href="https://github.com/dr-harper" className="text-decoration-none text-muted" target="_blank" rel="noopener noreferrer">
+                Mikey Harper
+              </a>
+            </small>
             <div className="d-flex gap-3">
               <a href="https://github.com/dr-harper/jsonpaths" className="text-decoration-none text-muted small" target="_blank" rel="noopener noreferrer">
                 <i className="bi bi-github me-1"></i>GitHub

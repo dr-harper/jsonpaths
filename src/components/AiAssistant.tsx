@@ -35,7 +35,6 @@ const AiAssistant = ({ jsonData, selectedLanguages }: AiAssistantProps) => {
 
     const questions: string[] = [];
     const dataStr = JSON.stringify(data).toLowerCase();
-    const keys = getAllKeys(data);
 
     // Price-related questions
     if (dataStr.includes('price')) {
