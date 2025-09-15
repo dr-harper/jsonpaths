@@ -39,6 +39,16 @@ function App() {
     return () => mediaQuery.removeEventListener('change', handleChange);
   }, []);
 
+  useEffect(() => {
+    const link = document.getElementById('bootstrap-theme') as HTMLLinkElement | null;
+    if (link) {
+      link.href =
+        theme === 'dark'
+          ? 'https://cdn.jsdelivr.net/npm/bootswatch@5.3.0/dist/darkly/bootstrap.min.css'
+          : 'https://cdn.jsdelivr.net/npm/bootswatch@5.3.0/dist/flatly/bootstrap.min.css';
+    }
+  }, [theme]);
+
   const toggleTheme = () => {
     const newTheme = theme === 'light' ? 'dark' : 'light';
     setTheme(newTheme);
@@ -98,25 +108,16 @@ function App() {
 
 
   return (
-    <div
-      className={`d-flex flex-column vh-100 ${theme === 'dark' ? 'bg-dark text-light' : 'bg-light'}`}
-      data-bs-theme={theme}
-    >
+    <div className="d-flex flex-column vh-100" data-bs-theme={theme}>
       {/* Bootstrap Navbar */}
-      <nav className={`navbar navbar-expand-lg ${theme === 'dark' ? 'navbar-dark bg-dark' : 'navbar-dark bg-primary'}`}>
+      <nav className="navbar navbar-expand-lg navbar-dark bg-primary">
         <div className="container-fluid">
           <a className="navbar-brand fw-bold" href="#">
             <i className="bi bi-braces me-2"></i>
             JSON Path Navigator
           </a>
           <div className="d-flex align-items-center gap-2">
-            <span
-              className={`badge ${
-                theme === 'dark' ? 'bg-secondary text-light' : 'bg-light text-primary'
-              }`}
-            >
-              v1.0.0
-            </span>
+            <span className="badge bg-secondary">v1.0.0</span>
             <button
               className="btn btn-sm btn-outline-light"
               onClick={toggleTheme}
@@ -134,8 +135,8 @@ function App() {
           <div className="row g-3 flex-fill">
             {/* JSON Input Card */}
             <div className="col-12 col-md-6 col-lg-4 mb-3 mb-lg-0 d-flex">
-              <div className={`card w-100 shadow-sm d-flex flex-column ${theme === 'dark' ? 'text-bg-dark' : ''}`}>
-                <div className={`card-header ${theme === 'dark' ? 'bg-dark border-secondary' : 'bg-white'}`}>
+              <div className="card w-100 shadow-sm d-flex flex-column">
+                <div className="card-header">
                   <div className="d-flex justify-content-between align-items-center">
                     <h6 className="mb-0 fw-bold">
                       <i className="bi bi-code-square me-2 text-primary"></i>
@@ -186,8 +187,8 @@ function App() {
 
             {/* Structure View */}
             <div className="col-12 col-md-6 col-lg-4 mb-3 mb-lg-0 d-flex">
-              <div className={`card w-100 shadow-sm d-flex flex-column ${theme === 'dark' ? 'text-bg-dark' : ''}`}>
-                <div className={`card-header ${theme === 'dark' ? 'bg-dark border-secondary' : 'bg-white'}`}>
+              <div className="card w-100 shadow-sm d-flex flex-column">
+                <div className="card-header">
                   <div className="d-flex justify-content-between align-items-center">
                     <h6 className="mb-0 fw-bold">
                       <i className="bi bi-diagram-3 me-2 text-primary"></i>
@@ -241,7 +242,6 @@ function App() {
                       onPathSelect={setSelectedPath}
                       searchTerm={searchTerm}
                       viewMode={viewMode}
-                      theme={theme}
                     />
                   ) : (
                     <div className="text-center text-muted py-5">
@@ -256,8 +256,8 @@ function App() {
 
             {/* Language Examples Panel */}
             <div className="col-12 col-md-12 col-lg-4 d-flex">
-              <div className={`card w-100 shadow-sm d-flex flex-column ${theme === 'dark' ? 'text-bg-dark' : ''}`}>
-                <LanguageExamples path={selectedPath} theme={theme} />
+              <div className="card w-100 shadow-sm d-flex flex-column">
+                <LanguageExamples path={selectedPath} />
               </div>
             </div>
           </div>
@@ -265,7 +265,7 @@ function App() {
       </main>
 
       {/* Footer */}
-      <footer className={`border-top py-3 ${theme === 'dark' ? 'bg-dark text-light' : 'bg-white'}`}>
+      <footer className="border-top py-3">
         <div className="container-fluid">
           <div className="d-flex justify-content-between align-items-center">
             <small className="text-muted">© 2024 JSON Path Navigator</small>

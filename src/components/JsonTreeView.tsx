@@ -13,7 +13,6 @@ interface JsonTreeViewProps {
   onPathSelect: (path: string[]) => void;
   searchTerm?: string;
   viewMode?: 'tree' | 'compact' | 'raw';
-  theme?: 'light' | 'dark';
 }
 
 interface TreeNodeProps {
@@ -25,7 +24,6 @@ interface TreeNodeProps {
   isLast?: boolean;
   parentExpanded?: boolean;
   selectedPath?: string[];
-  theme: 'light' | 'dark';
 }
 
 const TreeNode: React.FC<TreeNodeProps> = ({
@@ -35,8 +33,7 @@ const TreeNode: React.FC<TreeNodeProps> = ({
   onPathSelect,
   searchTerm,
   isLast = false,
-  selectedPath = [],
-  theme
+  selectedPath = []
 }) => {
   const [isExpanded, setIsExpanded] = useState(true);
   const [copiedValue, setCopiedValue] = useState(false);
@@ -232,7 +229,7 @@ const TreeNode: React.FC<TreeNodeProps> = ({
         {path.length > 0 && (
           <>
             <span
-              className={`fw-bold me-2 hover-text-primary ${theme === 'dark' ? 'text-light' : 'text-dark'}`}
+              className="fw-bold me-2 hover-text-primary"
               onClick={() => onPathSelect(path)}
               style={{ cursor: 'pointer' }}
             >
@@ -250,7 +247,7 @@ const TreeNode: React.FC<TreeNodeProps> = ({
         {!isExpandable && (
           <button
             onClick={() => handleCopyValue(data)}
-            className={`btn btn-sm ms-2 py-0 px-1 ${theme === 'dark' ? 'btn-outline-light' : 'btn-outline-secondary'}`}
+            className="btn btn-sm ms-2 py-0 px-1 btn-outline-secondary"
             style={{ fontSize: '0.7rem', opacity: copiedValue ? 1 : 0.3 }}
             onMouseEnter={(e) => (e.currentTarget.style.opacity = '1')}
             onMouseLeave={(e) => !copiedValue && (e.currentTarget.style.opacity = '0.3')}
@@ -273,7 +270,6 @@ const TreeNode: React.FC<TreeNodeProps> = ({
                 searchTerm={searchTerm}
                 isLast={index === data.length - 1}
                 selectedPath={selectedPath}
-                theme={theme}
               />
             ))
           ) : (
@@ -287,7 +283,6 @@ const TreeNode: React.FC<TreeNodeProps> = ({
                 searchTerm={searchTerm}
                 isLast={index === arr.length - 1}
                 selectedPath={selectedPath}
-                theme={theme}
               />
             ))
           )}
@@ -301,8 +296,7 @@ const JsonTreeView: React.FC<JsonTreeViewProps> = ({
   data,
   onPathSelect,
   searchTerm = '',
-  viewMode = 'tree',
-  theme = 'light'
+  viewMode = 'tree'
 }) => {
   const [selectedPath, setSelectedPath] = useState<string[]>([]);
 
@@ -352,7 +346,7 @@ const JsonTreeView: React.FC<JsonTreeViewProps> = ({
     return (
       <div>
         {breadcrumb}
-        <pre className={`p-3 rounded ${theme === 'dark' ? 'bg-dark text-light' : 'bg-light'}`}>
+        <pre className="p-3 rounded bg-body-secondary">
           <code>{JSON.stringify(data, null, 2)}</code>
         </pre>
       </div>
@@ -364,7 +358,7 @@ const JsonTreeView: React.FC<JsonTreeViewProps> = ({
     return (
       <div>
         {breadcrumb}
-        <pre className={`p-3 rounded ${theme === 'dark' ? 'bg-dark text-light' : 'bg-light'}`}>
+        <pre className="p-3 rounded bg-body-secondary">
           <code>{JSON.stringify(data)}</code>
         </pre>
       </div>
@@ -387,7 +381,6 @@ const JsonTreeView: React.FC<JsonTreeViewProps> = ({
           onPathSelect={handlePathSelect}
           searchTerm={searchTerm}
           selectedPath={selectedPath}
-          theme={theme}
         />
       </div>
     </div>
