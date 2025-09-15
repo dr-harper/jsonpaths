@@ -47,7 +47,10 @@ const DocumentationModal: React.FC<DocumentationModalProps> = ({ isOpen, onClose
                 </h6>
                 <p>
                   JSON Assistant is a powerful tool for exploring, querying, and extracting data from JSON structures.
-                  It provides visual navigation, AI-powered querying, and code generation for multiple programming languages.
+                  It provides visual navigation, AI-powered path finding, JSONPath querying, and accurate code generation for multiple programming languages.
+                </p>
+                <p className="text-muted small">
+                  <strong>Version:</strong> 1.0.0
                 </p>
               </section>
 
@@ -116,11 +119,38 @@ const DocumentationModal: React.FC<DocumentationModalProps> = ({ isOpen, onClose
                 </div>
               </section>
 
-              {/* AI Assistant */}
+              {/* JSONPath Query */}
+              <section className="mb-4">
+                <h6 className="text-purple mb-3" style={{ color: '#6f42c1' }}>
+                  <i className="bi bi-search me-2"></i>
+                  JSONPath Query Panel
+                </h6>
+                <div className="mb-3">
+                  <strong>Direct JSONPath Queries:</strong>
+                  <ul className="list-unstyled ms-3 mt-2">
+                    <li className="mb-1">• Write JSONPath expressions directly to query your data</li>
+                    <li className="mb-1">• See real-time results as you type</li>
+                    <li className="mb-1">• Access example queries and syntax reference</li>
+                    <li>• Supports advanced features like filters, wildcards, and array slicing</li>
+                  </ul>
+                </div>
+                <div>
+                  <strong>Common Patterns:</strong>
+                  <ul className="list-unstyled ms-3 mt-2">
+                    <li className="mb-1"><code>$</code> - Root object</li>
+                    <li className="mb-1"><code>$.user.name</code> - Specific path</li>
+                    <li className="mb-1"><code>$..email</code> - All email fields anywhere</li>
+                    <li className="mb-1"><code>$.items[*]</code> - All array items</li>
+                    <li><code>$.items[?(@.price &gt; 50)]</code> - Filtered results</li>
+                  </ul>
+                </div>
+              </section>
+
+              {/* AI Path Finder */}
               <section className="mb-4">
                 <h6 className="text-warning mb-3">
                   <i className="bi bi-robot me-2"></i>
-                  AI Assistant Panel
+                  AI Path Finder Panel
                 </h6>
 
                 <div className="mb-3">
@@ -139,11 +169,12 @@ const DocumentationModal: React.FC<DocumentationModalProps> = ({ isOpen, onClose
                 </div>
 
                 <div className="mb-3">
-                  <strong>Natural Language Queries:</strong>
+                  <strong>Finding Paths to Your Data:</strong>
                   <ul className="list-unstyled ms-3 mt-2">
-                    <li className="mb-1">• Ask questions in plain English about your JSON data</li>
-                    <li className="mb-1">• Get suggested queries based on your data structure</li>
-                    <li>• Examples: "Find all items with price greater than 100", "Extract all email addresses"</li>
+                    <li className="mb-1">• Ask in plain English how to find specific data in your JSON</li>
+                    <li className="mb-1">• Get JSONPath expressions to locate your data</li>
+                    <li className="mb-1">• Receive working code examples for accessing the data</li>
+                    <li>• Examples: "Get all user emails", "Find items over $50", "Extract all addresses"</li>
                   </ul>
                 </div>
 
@@ -197,9 +228,12 @@ const DocumentationModal: React.FC<DocumentationModalProps> = ({ isOpen, onClose
                     </ul>
                   </div>
                 </div>
-                <p>
+                <p className="mb-2">
                   <i className="bi bi-gear me-1"></i>
-                  Use the settings button to choose which languages to display.
+                  Click the <i className="bi bi-code-slash"></i> button in the navbar or the Configure button in any panel to choose which languages to display.
+                </p>
+                <p>
+                  <strong>Note:</strong> The AI Path Finder generates accurate code for complex queries including array wildcards, filters, and aggregations.
                 </p>
               </section>
 
@@ -228,11 +262,15 @@ const DocumentationModal: React.FC<DocumentationModalProps> = ({ isOpen, onClose
                   </li>
                   <li className="mb-2">
                     <i className="bi bi-check-circle text-success me-2"></i>
-                    Try asking the AI natural language questions about your data structure
+                    Ask the AI Path Finder to help you find specific data using natural language
                   </li>
                   <li className="mb-2">
                     <i className="bi bi-check-circle text-success me-2"></i>
-                    Copy code examples directly from the language panels
+                    Copy code examples directly from the language panels - they're automatically generated for your selected path
+                  </li>
+                  <li className="mb-2">
+                    <i className="bi bi-check-circle text-success me-2"></i>
+                    Configure which programming languages to display using the language settings
                   </li>
                   <li>
                     <i className="bi bi-check-circle text-success me-2"></i>

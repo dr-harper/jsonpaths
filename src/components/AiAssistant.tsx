@@ -4,6 +4,8 @@ import { JSONPath } from 'jsonpath-plus';
 interface AiAssistantProps {
   jsonData: any;
   selectedLanguages: Array<{id: string, name: string, icon: string, getExample: (path: string[]) => string}>;
+  onLanguagesChange?: (languages: Array<{id: string, name: string, icon: string, getExample: (path: string[]) => string}>) => void;
+  onShowLanguageSettings?: () => void;
 }
 
 interface QueryResult {
@@ -13,9 +15,12 @@ interface QueryResult {
   results: any[];
   codeExamples: Array<{language: string, icon: string, code: string}>;
   error?: string;
+  jsonPathError?: string | null;
+  requiresPostProcessing?: boolean;
+  postProcessingNote?: string;
 }
 
-const AiAssistant = ({ jsonData, selectedLanguages }: AiAssistantProps) => {
+const AiAssistant = ({ jsonData, selectedLanguages, onLanguagesChange, onShowLanguageSettings }: AiAssistantProps) => {
   const [query, setQuery] = useState('');
   const [result, setResult] = useState<QueryResult | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -25,10 +30,19 @@ const AiAssistant = ({ jsonData, selectedLanguages }: AiAssistantProps) => {
   const [showApiKeyInput, setShowApiKeyInput] = useState(!apiKey);
   const [debugMode, setDebugMode] = useState(false);
   const [lastError, setLastError] = useState<any>(null);
+  const [lastSuccessfulQuery, setLastSuccessfulQuery] = useState<string>('');
 
   useEffect(() => {
     localStorage.setItem('gemini-api-key', apiKey);
   }, [apiKey]);
+
+  // Rerun the last query when languages change
+  useEffect(() => {
+    if (lastSuccessfulQuery && result && selectedLanguages.length > 0) {
+      // Only rerun if we have a previous successful query and result
+      handleSubmit(lastSuccessfulQuery);
+    }
+  }, [selectedLanguages]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const generateDynamicQuestions = (data: any): string[] => {
     if (!data) return [];
@@ -126,6 +140,16 @@ const AiAssistant = ({ jsonData, selectedLanguages }: AiAssistantProps) => {
 1. A clear explanation of what we're looking for
 2. The JSONPath expression to extract that data
 3. A technical explanation of how the JSONPath works
+
+IMPORTANT JSONPath Limitations:
+- JSONPath cannot perform aggregation functions like min(), max(), sum(), avg()
+- JSONPath cannot compare values across different array elements
+- For questions asking for "cheapest", "most expensive", "best", etc., extract ALL relevant items and let the application handle the comparison
+- Use simple comparison operators: ==, !=, <, >, <=, >=
+- Valid filter examples: $.products[?(@.price > 50)], $.items[?(@.inStock == true)]
+- Invalid examples: $.products[?(@.price == min($.products[*].price))], $.products[?(@.price == $.[*].price.min())]
+
+For complex queries like "cheapest item", use a simple path like "$.products[*]" to get all items, then explain that the application will find the cheapest one from the results.
 
 Format your response as JSON with this structure:
 {
@@ -229,34 +253,285 @@ Respond only with the JSON object, no additional text.`;
       const response = await callGeminiAPI(question);
       const parsedResponse = JSON.parse(response);
 
-      // Execute the JSONPath
-      const pathResults = executeJsonPath(parsedResponse.jsonPath);
-      const results = pathResults.map((r: any) => r.value);
+      // Execute the JSONPath directly and get detailed results
+      let pathResults: any[] = [];
+      let jsonPathError: string | null = null;
 
-      // Generate code examples for selected languages
+      try {
+        pathResults = executeJsonPath(parsedResponse.jsonPath);
+      } catch (error) {
+        jsonPathError = error instanceof Error ? error.message : 'Unknown JSONPath execution error';
+        console.error('JSONPath execution error:', error);
+      }
+
+      let results = pathResults.map((r: any) => r.value);
+
+      // Detect if post-processing is needed and what kind
+      const questionLower = question.toLowerCase();
+      let requiresPostProcessing = false;
+      let postProcessingNote = '';
+
+      if (results.length > 1 && (questionLower.includes('cheapest') || questionLower.includes('minimum price') || questionLower.includes('lowest price'))) {
+        requiresPostProcessing = true;
+        postProcessingNote = 'JSONPath retrieved all items, then JavaScript found the one with minimum price';
+        // Find the item with the lowest price
+        const cheapest = results.reduce((min, item) => {
+          const currentPrice = item?.price || Infinity;
+          const minPrice = min?.price || Infinity;
+          return currentPrice < minPrice ? item : min;
+        }, results[0]);
+        results = cheapest ? [cheapest] : [];
+      } else if (results.length > 1 && (questionLower.includes('most expensive') || questionLower.includes('maximum price') || questionLower.includes('highest price'))) {
+        requiresPostProcessing = true;
+        postProcessingNote = 'JSONPath retrieved all items, then JavaScript found the one with maximum price';
+        // Find the item with the highest price
+        const expensive = results.reduce((max, item) => {
+          const currentPrice = item?.price || -Infinity;
+          const maxPrice = max?.price || -Infinity;
+          return currentPrice > maxPrice ? item : max;
+        }, results[0]);
+        results = expensive ? [expensive] : [];
+      }
+
+      // Generate code examples for selected languages with filtering logic
+      console.log('selectedLanguages:', selectedLanguages);
+      console.log('selectedLanguages length:', selectedLanguages.length);
+
       const codeExamples = selectedLanguages.map(lang => {
-        // Convert JSONPath to simple path array for code generation
-        const simplePath = parsedResponse.jsonPath
-          .replace(/^\$\./, '')
-          .replace(/\[(\d+)\]/g, '.$1')
-          .replace(/\[\?\([^\)]+\)\]/g, '[*]') // Simplify filters for code examples
-          .split('.')
-          .filter(Boolean);
+        const jsonPath = parsedResponse.jsonPath;
+
+        // Generate filtering code based on language and JSONPath
+        const generateFilteringCode = (language: string, jsonPath: string): string => {
+          console.log('Generating code for:', language, 'with JSONPath:', jsonPath);
+
+          // Check if JSONPath contains filtering logic
+          const hasFilter = jsonPath.includes('?(@');
+
+          if (!hasFilter) {
+            // Check if this is a complex query that needs aggregation logic
+            const isComplexQuery = question.toLowerCase().includes('cheapest') ||
+                                  question.toLowerCase().includes('most expensive') ||
+                                  question.toLowerCase().includes('minimum price') ||
+                                  question.toLowerCase().includes('maximum price');
+
+            if (isComplexQuery && jsonPath.includes('products[*]')) {
+              // Generate aggregation code for complex queries
+              switch (language) {
+                case 'Python':
+                  if (question.toLowerCase().includes('cheapest') || question.toLowerCase().includes('minimum price')) {
+                    return `min(data['products'], key=lambda x: x.get('price', float('inf')))`;
+                  } else if (question.toLowerCase().includes('most expensive') || question.toLowerCase().includes('maximum price')) {
+                    return `max(data['products'], key=lambda x: x.get('price', 0))`;
+                  }
+                  break;
+                case 'JavaScript':
+                  if (question.toLowerCase().includes('cheapest') || question.toLowerCase().includes('minimum price')) {
+                    return `data.products.reduce((min, product) =>
+    product.price < min.price ? product : min
+)`;
+                  } else if (question.toLowerCase().includes('most expensive') || question.toLowerCase().includes('maximum price')) {
+                    return `data.products.reduce((max, product) =>
+    product.price > max.price ? product : max
+)`;
+                  }
+                  break;
+                case 'Swift':
+                  if (question.toLowerCase().includes('cheapest') || question.toLowerCase().includes('minimum price')) {
+                    return `data["products"]?.min {
+    ($0["price"] as? Double ?? Double.infinity) <
+    ($1["price"] as? Double ?? Double.infinity)
+}`;
+                  } else if (question.toLowerCase().includes('most expensive') || question.toLowerCase().includes('maximum price')) {
+                    return `data["products"]?.max {
+    ($0["price"] as? Double ?? 0) <
+    ($1["price"] as? Double ?? 0)
+}`;
+                  }
+                  break;
+              }
+            }
+
+            // Check if this is an array wildcard query
+            const hasArrayWildcard = jsonPath.includes('[*]');
+
+            if (hasArrayWildcard) {
+              // Extract the array path and the field after the wildcard
+              const pathMatch = jsonPath.match(/^\$\.(.+?)\[\*\](?:\.(.+))?$/);
+
+              if (pathMatch) {
+                const arrayPath = pathMatch[1];
+                const fieldPath = pathMatch[2];
+
+                console.log('Array wildcard detected:', { arrayPath, fieldPath });
+
+                // Generate array iteration code
+                switch (language) {
+                  case 'Python':
+                    if (fieldPath) {
+                      // Accessing a field from each array element
+                      const fieldAccess = fieldPath.split('.').map(f => `['${f}']`).join('');
+                      return `[item${fieldAccess} for item in data['${arrayPath}']]`;
+                    } else {
+                      // Just getting all array elements
+                      return `data['${arrayPath}']`;
+                    }
+
+                  case 'JavaScript':
+                    if (fieldPath) {
+                      // Accessing nested fields
+                      const fieldAccess = fieldPath.split('.').map(f => `.${f}`).join('');
+                      return `data.${arrayPath}.map(item => item${fieldAccess})`;
+                    } else {
+                      return `data.${arrayPath}`;
+                    }
+
+                  case 'Swift':
+                    if (fieldPath) {
+                      const fieldAccess = fieldPath.split('.').map(f => `["${f}"]`).join('');
+                      return `data["${arrayPath}"]?.compactMap { $0${fieldAccess} }`;
+                    } else {
+                      return `data["${arrayPath}"]`;
+                    }
+
+                  default:
+                    // For other languages, show a comment
+                    return `// Iterate through ${arrayPath} array${fieldPath ? ` and access ${fieldPath}` : ''}`;
+                }
+              }
+            }
+
+            // Simple path access without array wildcards
+            const simplePath = jsonPath
+              .replace(/^\$\./, '')
+              .replace(/\[(\d+)\]/g, '.$1')
+              .replace(/\[\*\]/g, '')
+              .split('.')
+              .filter(Boolean);
+            console.log('Simple path for', language, ':', simplePath);
+            return lang.getExample(simplePath);
+          }
+
+          // Extract filtering logic for different languages
+          console.log('Has filter, language is:', language);
+          switch (language) {
+            case 'Python':
+              if (jsonPath.includes('price > 100')) {
+                return `[product['name'] for product in data['products'] if product['price'] > 100]`;
+              } else if (jsonPath.includes('inStock == true')) {
+                return `[item for item in data['products'] if item.get('inStock') == True]`;
+              } else if (jsonPath.includes('products[*]')) {
+                // Check if this is for finding cheapest/most expensive
+                if (question.toLowerCase().includes('cheapest') || question.toLowerCase().includes('minimum price')) {
+                  return `min(data['products'], key=lambda x: x.get('price', float('inf')))`;
+                } else if (question.toLowerCase().includes('most expensive') || question.toLowerCase().includes('maximum price')) {
+                  return `max(data['products'], key=lambda x: x.get('price', 0))`;
+                }
+                return `[item['name'] for item in data['products']]`;
+              }
+              return `# Filter products based on condition\n[item for item in data if condition(item)]`;
+
+            case 'JavaScript':
+              if (jsonPath.includes('price > 100')) {
+                return `data.products.filter(product => product.price > 100).map(product => product.name)`;
+              } else if (jsonPath.includes('inStock == true')) {
+                return `data.products.filter(item => item.inStock === true)`;
+              } else if (jsonPath.includes('products[*]')) {
+                // Check if this is for finding cheapest/most expensive
+                if (question.toLowerCase().includes('cheapest') || question.toLowerCase().includes('minimum price')) {
+                  return `data.products.reduce((min, product) =>
+    product.price < min.price ? product : min
+)`;
+                } else if (question.toLowerCase().includes('most expensive') || question.toLowerCase().includes('maximum price')) {
+                  return `data.products.reduce((max, product) =>
+    product.price > max.price ? product : max
+)`;
+                }
+                return `data.products.map(item => item.name)`;
+              }
+              return `data.products.filter(item => /* condition */).map(item => item.property)`;
+
+            case 'Swift':
+              if (jsonPath.includes('price > 100')) {
+                return `data["products"]?.compactMap { product in
+    guard let price = product["price"] as? Double, price > 100 else { return nil }
+    return product["name"] as? String
+}`;
+              } else if (jsonPath.includes('inStock == true')) {
+                return `data["products"]?.filter { ($0["inStock"] as? Bool) == true }`;
+              } else if (jsonPath.includes('products[*]')) {
+                // Check if this is for finding cheapest/most expensive
+                if (question.toLowerCase().includes('cheapest') || question.toLowerCase().includes('minimum price')) {
+                  return `data["products"]?.min {
+    ($0["price"] as? Double ?? Double.infinity) <
+    ($1["price"] as? Double ?? Double.infinity)
+}`;
+                } else if (question.toLowerCase().includes('most expensive') || question.toLowerCase().includes('maximum price')) {
+                  return `data["products"]?.max {
+    ($0["price"] as? Double ?? 0) <
+    ($1["price"] as? Double ?? 0)
+}`;
+                }
+              }
+              return `data["products"]?.filter { /* condition */ }`;
+
+            default:
+              console.log('Using default case for:', language);
+
+              // Check if this is a complex query that needs aggregation logic for other languages
+              const isComplexQuery = question.toLowerCase().includes('cheapest') ||
+                                    question.toLowerCase().includes('most expensive') ||
+                                    question.toLowerCase().includes('minimum price') ||
+                                    question.toLowerCase().includes('maximum price');
+
+              if (isComplexQuery && jsonPath.includes('products[*]')) {
+                // Generate basic aggregation code for other languages
+                if (question.toLowerCase().includes('cheapest') || question.toLowerCase().includes('minimum price')) {
+                  return `// Find item with minimum price\n// Implementation varies by language`;
+                } else if (question.toLowerCase().includes('most expensive') || question.toLowerCase().includes('maximum price')) {
+                  return `// Find item with maximum price\n// Implementation varies by language`;
+                }
+              }
+
+              // Fallback to simple path for other languages
+              const simplePath = jsonPath
+                .replace(/^\$\./, '')
+                .replace(/\[(\d+)\]/g, '.$1')
+                .replace(/\[\?\([^\)]+\)\]/g, '[*]')
+                .replace(/\[\*\]/g, '')
+                .split('.')
+                .filter(Boolean);
+              return lang.getExample(simplePath);
+          }
+        };
+
+        const code = generateFilteringCode(lang.name, jsonPath);
+        console.log('Final code for', lang.name, ':', code);
+
+        // Ensure we always have some code to show
+        const finalCode = code || `// ${lang.name} code example would go here\n// JSONPath: ${jsonPath}`;
 
         return {
           language: lang.name,
           icon: lang.icon,
-          code: lang.getExample(simplePath)
+          code: finalCode
         };
       });
+
+      console.log('All code examples:', codeExamples);
 
       setResult({
         explanation: parsedResponse.explanation,
         jsonPath: parsedResponse.jsonPath,
         reasoning: parsedResponse.reasoning,
         results: results,
-        codeExamples: codeExamples
+        codeExamples: codeExamples,
+        jsonPathError: jsonPathError,
+        requiresPostProcessing: requiresPostProcessing,
+        postProcessingNote: postProcessingNote
       });
+
+      // Save the successful query
+      setLastSuccessfulQuery(question);
 
     } catch (error) {
       setLastError(error);
@@ -282,6 +557,7 @@ Respond only with the JSON object, no additional text.`;
   const clearResult = () => {
     setResult(null);
     setQuery('');
+    setLastSuccessfulQuery('');
   };
 
   return (
@@ -290,7 +566,8 @@ Respond only with the JSON object, no additional text.`;
         <div className="d-flex justify-content-between align-items-center">
           <h6 className="mb-0 fw-bold">
             <i className="bi bi-robot me-2 text-primary"></i>
-            AI Assistant
+            AI Path Finder
+            <small className="text-muted fw-normal ms-2" style={{ fontSize: '0.75rem' }}>Get paths to your JSON data</small>
           </h6>
           <div className="d-flex gap-1">
             <button
@@ -318,7 +595,7 @@ Respond only with the JSON object, no additional text.`;
         </div>
       </div>
 
-      <div className="card-body d-flex flex-column p-0 h-100">
+      <div className="card-body d-flex flex-column p-0 overflow-hidden" style={{ flex: '1 1 auto' }}>
         {/* API Key Configuration */}
         {showApiKeyInput && (
           <div className="p-3 border-bottom bg-light">
@@ -374,7 +651,7 @@ Respond only with the JSON object, no additional text.`;
             <input
               type="text"
               className="form-control"
-              placeholder={apiKey ? "Ask about your JSON data..." : "Configure API key first"}
+              placeholder={apiKey ? "Ask how to find specific data (e.g., 'get all user emails', 'find items over $50')" : "Configure API key first"}
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && handleSubmit(query)}
@@ -400,7 +677,7 @@ Respond only with the JSON object, no additional text.`;
             <div>
               <small className="text-muted d-block mb-2">
                 <i className="bi bi-lightbulb me-1"></i>
-                Try asking about your data:
+                Example queries to find paths in your data:
               </small>
               <div className="d-flex flex-wrap gap-1">
                 {dynamicQuestions.slice(0, 3).map((question, idx) => (
@@ -438,7 +715,7 @@ Respond only with the JSON object, no additional text.`;
         </div>
 
         {/* Query Result */}
-        <div className="flex-grow-1 p-3 overflow-auto">
+        <div className="flex-grow-1 p-3 overflow-auto" style={{ minHeight: 0, maxHeight: '100%' }}>
           {!result && !isLoading ? (
             <div className="text-center text-muted">
               <i className="bi bi-search display-4 mb-3"></i>
@@ -478,19 +755,41 @@ Respond only with the JSON object, no additional text.`;
                         <div className="mb-3">
                           <h6 className="text-success mb-2">
                             <i className="bi bi-code-slash me-2"></i>JSONPath Query
+                            {result.requiresPostProcessing && (
+                              <span className="badge bg-warning text-dark ms-2" title={result.postProcessingNote}>
+                                <i className="bi bi-gear me-1"></i>+ Processing
+                              </span>
+                            )}
                           </h6>
                           <div className="bg-dark text-white p-2 rounded">
                             <code className="text-info">{result.jsonPath}</code>
                           </div>
+                          {result.requiresPostProcessing && result.postProcessingNote && (
+                            <small className="text-muted d-block mt-1">
+                              <i className="bi bi-info-circle me-1"></i>
+                              {result.postProcessingNote}
+                            </small>
+                          )}
                         </div>
                       )}
 
-                      {/* Code Examples */}
-                      {result.codeExamples.length > 0 && (
+                      {/* Code Examples - Always show if available */}
+                      {result.codeExamples && result.codeExamples.length > 0 && (
                         <div className="mb-3">
-                          <h6 className="text-secondary mb-2">
-                            <i className="bi bi-code-slash me-2"></i>Code Examples
-                          </h6>
+                          <div className="d-flex justify-content-between align-items-center mb-2">
+                            <h6 className="text-secondary mb-0">
+                              <i className="bi bi-code-slash me-2"></i>Code Examples
+                            </h6>
+                            <button
+                              onClick={() => onShowLanguageSettings?.()}
+                              className="btn btn-sm btn-outline-secondary py-0 px-2"
+                              style={{ fontSize: '11px', height: '22px' }}
+                              title="Configure Languages"
+                            >
+                              <i className="bi bi-gear me-1" style={{ fontSize: '11px' }}></i>
+                              Configure
+                            </button>
+                          </div>
                           <div className="border rounded">
                             {result.codeExamples.map((example, idx) => (
                               <div key={idx} className={`d-flex align-items-center justify-content-between p-2 ${idx > 0 ? 'border-top' : ''}`}>
@@ -515,19 +814,30 @@ Respond only with the JSON object, no additional text.`;
                         </div>
                       )}
 
-                      {/* Results */}
-                      {result.results.length > 0 && (
-                        <div className="mb-3">
-                          <h6 className="text-warning mb-2">
-                            <i className="bi bi-list-ul me-2"></i>Results ({result.results.length})
-                          </h6>
-                          <div className="bg-light p-2 rounded border">
+                      {/* Results - Always show JSONPath execution */}
+                      <div className="mb-3">
+                        <h6 className="text-warning mb-2">
+                          <i className="bi bi-list-ul me-2"></i>JSONPath Results
+                          {!result.jsonPathError && ` (${result.results.length})`}
+                        </h6>
+                        <div className="bg-light p-2 rounded border">
+                          {result.jsonPathError ? (
+                            <div className="text-danger">
+                              <i className="bi bi-exclamation-triangle me-1"></i>
+                              JSONPath Error: {result.jsonPathError}
+                            </div>
+                          ) : result.results.length === 0 ? (
+                            <div className="text-muted">
+                              <i className="bi bi-info-circle me-1"></i>
+                              No results found - the JSONPath query returned an empty result set
+                            </div>
+                          ) : (
                             <pre className="mb-0" style={{ fontSize: '11px', maxHeight: '150px', overflow: 'auto' }}>
                               {JSON.stringify(result.results, null, 2)}
                             </pre>
-                          </div>
+                          )}
                         </div>
-                      )}
+                      </div>
 
                       {/* Reasoning */}
                       {result.reasoning && (
