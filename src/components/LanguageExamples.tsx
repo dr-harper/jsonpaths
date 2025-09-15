@@ -154,16 +154,16 @@ const LanguageExamples = ({ path }: LanguageExamplesProps) => {
   const [languages, setLanguages] = useState<LanguageConfig[]>(() => {
     const savedPrefs = loadSavedPreferences();
     const defaultLanguages = [
-      { id: 'python', name: 'Python', enabled: true, getExample: (p) => generatePath(p, 'python') },
-      { id: 'javascript', name: 'JavaScript', enabled: true, getExample: (p) => generatePath(p, 'javascript') },
-      { id: 'ruby', name: 'Ruby', enabled: true, getExample: (p) => generatePath(p, 'ruby') },
-      { id: 'php', name: 'PHP', enabled: true, getExample: (p) => generatePath(p, 'php') },
-      { id: 'java', name: 'Java', enabled: false, getExample: (p) => generatePath(p, 'java') },
-      { id: 'csharp', name: 'C#', enabled: false, getExample: (p) => generatePath(p, 'csharp') },
-      { id: 'go', name: 'Go', enabled: false, getExample: (p) => generatePath(p, 'go') },
-      { id: 'rust', name: 'Rust', enabled: false, getExample: (p) => generatePath(p, 'rust') },
-      { id: 'swift', name: 'Swift', enabled: false, getExample: (p) => generatePath(p, 'swift') },
-      { id: 'kotlin', name: 'Kotlin', enabled: false, getExample: (p) => generatePath(p, 'kotlin') },
+      { id: 'python', name: 'Python', enabled: true, getExample: (p: string[]) => generatePath(p, 'python') },
+      { id: 'javascript', name: 'JavaScript', enabled: true, getExample: (p: string[]) => generatePath(p, 'javascript') },
+      { id: 'ruby', name: 'Ruby', enabled: true, getExample: (p: string[]) => generatePath(p, 'ruby') },
+      { id: 'php', name: 'PHP', enabled: true, getExample: (p: string[]) => generatePath(p, 'php') },
+      { id: 'java', name: 'Java', enabled: false, getExample: (p: string[]) => generatePath(p, 'java') },
+      { id: 'csharp', name: 'C#', enabled: false, getExample: (p: string[]) => generatePath(p, 'csharp') },
+      { id: 'go', name: 'Go', enabled: false, getExample: (p: string[]) => generatePath(p, 'go') },
+      { id: 'rust', name: 'Rust', enabled: false, getExample: (p: string[]) => generatePath(p, 'rust') },
+      { id: 'swift', name: 'Swift', enabled: false, getExample: (p: string[]) => generatePath(p, 'swift') },
+      { id: 'kotlin', name: 'Kotlin', enabled: false, getExample: (p: string[]) => generatePath(p, 'kotlin') },
     ];
 
     // Apply saved preferences if they exist

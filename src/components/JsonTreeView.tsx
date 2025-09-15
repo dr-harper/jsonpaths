@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState } from 'react';
 
 type JsonData =
   | null
@@ -113,7 +113,7 @@ const TreeNode: React.FC<TreeNodeProps> = ({
   const isExpandable = dataType === 'object' || dataType === 'array';
 
   // Highlight search matches
-  const highlightMatch = (text: string): JSX.Element => {
+  const highlightMatch = (text: string): React.ReactElement => {
     if (!searchTerm) return <>{text}</>;
 
     const regex = new RegExp(`(${searchTerm})`, 'gi');
@@ -298,7 +298,6 @@ const JsonTreeView: React.FC<JsonTreeViewProps> = ({
   searchTerm = '',
   viewMode = 'tree'
 }) => {
-  const [expandAll, setExpandAll] = useState(true);
   const [selectedPath, setSelectedPath] = useState<string[]>([]);
 
   const handlePathSelect = (path: string[]) => {
@@ -369,25 +368,6 @@ const JsonTreeView: React.FC<JsonTreeViewProps> = ({
   // Tree view (default)
   return (
     <div>
-      {/* Controls */}
-      <div className="d-flex justify-content-between align-items-center mb-3">
-        <div className="btn-group btn-group-sm" role="group">
-          <button
-            className="btn btn-outline-secondary"
-            onClick={() => setExpandAll(true)}
-          >
-            <i className="bi bi-arrows-expand me-1"></i>
-            Expand All
-          </button>
-          <button
-            className="btn btn-outline-secondary"
-            onClick={() => setExpandAll(false)}
-          >
-            <i className="bi bi-arrows-collapse me-1"></i>
-            Collapse All
-          </button>
-        </div>
-      </div>
 
       {/* Breadcrumb */}
       {breadcrumb}
