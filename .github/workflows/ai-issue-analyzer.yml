@@ -31,12 +31,14 @@ jobs:
 
           # Create .codex directory and auth.json
           mkdir -p ~/.codex
-          echo "$CODEX_AUTH_JSON" > ~/.codex/auth.json
+          echo '${{ secrets.CODEX_AUTH_JSON }}' > ~/.codex/auth.json
 
           # Verify installation
           codex --version
 
       - name: Analyze Issue with Codex
+        env:
+          CODEX_AUTH_JSON: ${{ secrets.CODEX_AUTH_JSON }}
         run: |
           # Create a temporary analysis prompt file
           cat > issue_analysis.md << 'EOF'
