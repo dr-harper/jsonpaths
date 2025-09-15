@@ -292,7 +292,7 @@ function App() {
               <a href="#" className="text-decoration-none text-muted small">
                 <i className="bi bi-book me-1"></i>Documentation
               </a>
-              <a href="#" className="text-decoration-none text-muted small">
+              <a href="https://github.com/dr-harper/jsonpaths" className="text-decoration-none text-muted small" target="_blank" rel="noopener noreferrer">
                 <i className="bi bi-github me-1"></i>GitHub
               </a>
               <a href="#" className="text-decoration-none text-muted small">
