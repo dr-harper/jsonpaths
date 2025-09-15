@@ -2,16 +2,18 @@ import { useState, useEffect } from 'react';
 
 interface LanguageExamplesProps {
   path: string[];
+  onLanguagesChange?: (languages: LanguageConfig[]) => void;
 }
 
 interface LanguageConfig {
   id: string;
   name: string;
+  icon: string;
   enabled: boolean;
   getExample: (path: string[]) => string;
 }
 
-const LanguageExamples = ({ path }: LanguageExamplesProps) => {
+const LanguageExamples = ({ path, onLanguagesChange }: LanguageExamplesProps) => {
   const [showSettings, setShowSettings] = useState(false);
   const [copied, setCopied] = useState<string | null>(null);
 
@@ -154,16 +156,16 @@ const LanguageExamples = ({ path }: LanguageExamplesProps) => {
   const [languages, setLanguages] = useState<LanguageConfig[]>(() => {
     const savedPrefs = loadSavedPreferences();
     const defaultLanguages = [
-      { id: 'python', name: 'Python', enabled: true, getExample: (p: string[]) => generatePath(p, 'python') },
-      { id: 'javascript', name: 'JavaScript', enabled: true, getExample: (p: string[]) => generatePath(p, 'javascript') },
-      { id: 'ruby', name: 'Ruby', enabled: true, getExample: (p: string[]) => generatePath(p, 'ruby') },
-      { id: 'php', name: 'PHP', enabled: true, getExample: (p: string[]) => generatePath(p, 'php') },
-      { id: 'java', name: 'Java', enabled: false, getExample: (p: string[]) => generatePath(p, 'java') },
-      { id: 'csharp', name: 'C#', enabled: false, getExample: (p: string[]) => generatePath(p, 'csharp') },
-      { id: 'go', name: 'Go', enabled: false, getExample: (p: string[]) => generatePath(p, 'go') },
-      { id: 'rust', name: 'Rust', enabled: false, getExample: (p: string[]) => generatePath(p, 'rust') },
-      { id: 'swift', name: 'Swift', enabled: false, getExample: (p: string[]) => generatePath(p, 'swift') },
-      { id: 'kotlin', name: 'Kotlin', enabled: false, getExample: (p: string[]) => generatePath(p, 'kotlin') },
+      { id: 'python', name: 'Python', icon: '🐍', enabled: true, getExample: (p: string[]) => generatePath(p, 'python') },
+      { id: 'javascript', name: 'JavaScript', icon: '🟨', enabled: false, getExample: (p: string[]) => generatePath(p, 'javascript') },
+      { id: 'ruby', name: 'Ruby', icon: '💎', enabled: false, getExample: (p: string[]) => generatePath(p, 'ruby') },
+      { id: 'php', name: 'PHP', icon: '🐘', enabled: false, getExample: (p: string[]) => generatePath(p, 'php') },
+      { id: 'java', name: 'Java', icon: '☕', enabled: false, getExample: (p: string[]) => generatePath(p, 'java') },
+      { id: 'csharp', name: 'C#', icon: '🔷', enabled: false, getExample: (p: string[]) => generatePath(p, 'csharp') },
+      { id: 'go', name: 'Go', icon: '🐹', enabled: false, getExample: (p: string[]) => generatePath(p, 'go') },
+      { id: 'rust', name: 'Rust', icon: '🦀', enabled: false, getExample: (p: string[]) => generatePath(p, 'rust') },
+      { id: 'swift', name: 'Swift', icon: '🐦', enabled: true, getExample: (p: string[]) => generatePath(p, 'swift') },
+      { id: 'kotlin', name: 'Kotlin', icon: '🎯', enabled: false, getExample: (p: string[]) => generatePath(p, 'kotlin') },
     ];
 
     // Apply saved preferences if they exist
@@ -184,7 +186,12 @@ const LanguageExamples = ({ path }: LanguageExamplesProps) => {
     } catch (error) {
       console.error('Failed to save preferences:', error);
     }
-  }, [languages]);
+
+    // Notify parent component of enabled languages
+    if (onLanguagesChange) {
+      onLanguagesChange(languages.filter(lang => lang.enabled));
+    }
+  }, [languages, onLanguagesChange]);
 
   const toggleLanguage = (id: string) => {
     setLanguages(prev => prev.map(lang =>
@@ -206,22 +213,6 @@ const LanguageExamples = ({ path }: LanguageExamplesProps) => {
 
   return (
     <div className="d-flex flex-column h-100">
-      <div className="card-header">
-        <div className="d-flex justify-content-between align-items-center">
-          <h6 className="mb-0 fw-bold">
-            <i className="bi bi-code-slash me-2 text-primary"></i>
-            Language Examples
-          </h6>
-          <button
-            onClick={() => setShowSettings(!showSettings)}
-            className="btn btn-sm btn-outline-secondary rounded-circle p-0"
-            style={{ width: '28px', height: '28px' }}
-            aria-label="Settings"
-          >
-            <i className="bi bi-gear" style={{ fontSize: '14px' }}></i>
-          </button>
-        </div>
-      </div>
 
       {showSettings && (
         <>
@@ -233,7 +224,7 @@ const LanguageExamples = ({ path }: LanguageExamplesProps) => {
           <div className="position-absolute top-0 end-0 mt-5 me-3" style={{ zIndex: 1050 }}>
             <div className="card shadow-lg" style={{ width: '250px' }}>
               <div className="card-body">
-                <h6 className="card-title mb-3">Select Languages</h6>
+                <h6 className="card-title mb-3">Configure Displayed Languages</h6>
                 <div style={{ maxHeight: '400px', overflowY: 'auto' }}>
                   {languages.map(lang => (
                     <div key={lang.id} className="form-check mb-2">
@@ -245,7 +236,7 @@ const LanguageExamples = ({ path }: LanguageExamplesProps) => {
                         onChange={() => toggleLanguage(lang.id)}
                       />
                       <label className="form-check-label" htmlFor={`lang-${lang.id}`}>
-                        {lang.name}
+                        <span className="me-1">{lang.icon}</span>{lang.name}
                       </label>
                     </div>
                   ))}
@@ -262,42 +253,47 @@ const LanguageExamples = ({ path }: LanguageExamplesProps) => {
         </>
       )}
 
-      <div className="card-body overflow-auto" style={{ padding: '12px' }}>
+      <div className="card-body overflow-auto" style={{ padding: '8px' }}>
         {path.length > 0 ? (
-          <div className="d-flex flex-column gap-2">
+          <div className="d-flex flex-column gap-1">
+            <div className="d-flex justify-content-between align-items-center mb-1">
+              <small className="text-muted">Code examples:</small>
+              <button
+                onClick={() => setShowSettings(!showSettings)}
+                className="btn btn-sm btn-outline-secondary px-2 py-0"
+                style={{ fontSize: '9px', height: '18px' }}
+              >
+                <i className="bi bi-gear me-1" style={{ fontSize: '9px' }}></i>
+                Configure
+              </button>
+            </div>
             {enabledLanguages.map(lang => {
               const example = lang.getExample(path);
               return (
-                <div key={lang.id} className="border rounded p-3 bg-light">
-                  <div className="d-flex justify-content-between align-items-center mb-2">
-                    <span className="fw-semibold">{lang.name}</span>
-                    <button
-                      onClick={() => handleCopy(example, lang.id)}
-                      className={`btn btn-sm py-0 px-2 ${
-                        copied === lang.id
-                          ? 'btn-success'
-                          : 'btn-outline-primary'
-                      }`}
-                      style={{ fontSize: '12px', height: '24px' }}
-                    >
-                      {copied === lang.id ? (
-                        <>
-                          <i className="bi bi-check me-1"></i>
-                          Copied
-                        </>
-                      ) : (
-                        <>
-                          <i className="bi bi-clipboard me-1"></i>
-                          Copy
-                        </>
-                      )}
-                    </button>
-                  </div>
-                  <div className="bg-white p-2 rounded border">
-                    <code className="text-break font-monospace" style={{ fontSize: '13px' }}>
+                <div key={lang.id} className="d-flex align-items-center justify-content-between py-0 px-1" style={{ minHeight: '18px' }}>
+                  <div className="d-flex align-items-center flex-grow-1">
+                    <span className="me-1" style={{ fontSize: '12px' }}>{lang.icon}</span>
+                    <span className="fw-semibold me-1" style={{ fontSize: '10px', minWidth: '50px' }}>{lang.name}:</span>
+                    <code className="text-break font-monospace flex-grow-1" style={{ fontSize: '10px', background: 'none' }}>
                       {example}
                     </code>
                   </div>
+                  <button
+                    onClick={() => handleCopy(example, lang.id)}
+                    className={`btn py-0 px-1 ms-1 ${
+                      copied === lang.id
+                        ? 'btn-success'
+                        : 'btn-outline-primary'
+                    }`}
+                    style={{ fontSize: '8px', height: '16px', minWidth: '16px', border: 'none' }}
+                    title="Copy to clipboard"
+                  >
+                    {copied === lang.id ? (
+                      <i className="bi bi-check"></i>
+                    ) : (
+                      <i className="bi bi-clipboard"></i>
+                    )}
+                  </button>
                 </div>
               );
             })}

@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
 import LanguageExamples from './components/LanguageExamples';
 import JsonTreeView from './components/JsonTreeView';
+import AiAssistant from './components/AiAssistant';
+import DocumentationModal from './components/DocumentationModal';
 
 type JsonData =
   | null
@@ -16,11 +18,14 @@ function App() {
   const [selectedPath, setSelectedPath] = useState<string[]>([]);
   const [error, setError] = useState<string>('');
   const [searchTerm, setSearchTerm] = useState<string>('');
+  const [filterMode, setFilterMode] = useState<boolean>(true);
   const [viewMode, setViewMode] = useState<'tree' | 'compact' | 'raw'>('tree');
+  const [selectedLanguages, setSelectedLanguages] = useState<Array<{id: string, name: string, icon: string, getExample: (path: string[]) => string}>>([]);
   const [darkMode, setDarkMode] = useState<boolean>(() => {
     const saved = localStorage.getItem('darkMode');
     return saved ? JSON.parse(saved) : false;
   });
+  const [showDocumentation, setShowDocumentation] = useState<boolean>(false);
 
   useEffect(() => {
     const lightTheme = document.getElementById('bootstrap-theme') as HTMLLinkElement;
@@ -204,10 +209,25 @@ function App() {
       <nav className="navbar navbar-expand-lg navbar-dark bg-primary">
         <div className="container-fluid">
           <a className="navbar-brand fw-bold" href="#">
-            <i className="bi bi-braces me-2"></i>
-            JSON Path Navigator
+            <div className="d-flex flex-column">
+              <div>
+                <i className="bi bi-braces me-2"></i>
+                JSON Assistant
+              </div>
+              <small className="text-light opacity-75" style={{ fontSize: '0.75rem', fontWeight: 'normal' }}>
+                Explore, query, and extract data with AI assistance
+              </small>
+            </div>
           </a>
           <div className="d-flex align-items-center gap-2">
+            <button
+              onClick={() => setShowDocumentation(true)}
+              className="btn btn-sm btn-outline-light rounded-circle p-0"
+              style={{ width: '32px', height: '32px' }}
+              title="Documentation & Help"
+            >
+              <i className="bi bi-question-circle-fill"></i>
+            </button>
             <button
               onClick={() => setDarkMode(!darkMode)}
               className="btn btn-sm btn-outline-light rounded-circle p-0"
@@ -230,9 +250,9 @@ function App() {
         <div className="container-fluid p-3 d-flex">
           <div className="row g-3 flex-fill">
             {/* JSON Input Card */}
-            <div className="col-12 col-md-6 col-lg-4 mb-3 mb-lg-0 d-flex">
+            <div className="col-12 col-md-6 col-lg-3 mb-3 mb-lg-0 d-flex">
               <div className="card w-100 shadow-sm d-flex flex-column">
-                <div className={`card-header ${darkMode ? 'bg-dark' : 'bg-white'}`}>
+                <div className="card-header">
                   <div className="d-flex justify-content-between align-items-center">
                     <h6 className="mb-0 fw-bold">
                       <i className="bi bi-code-square me-2 text-primary"></i>
@@ -259,7 +279,7 @@ function App() {
                       </label>
                       <button
                         onClick={() => handleJsonChange('')}
-                        className="btn btn-outline-secondary"
+                        className="btn btn-outline-primary"
                         title="Clear all content"
                       >
                         <i className="bi bi-x-lg me-1"></i>
@@ -296,7 +316,7 @@ function App() {
             {/* Structure View */}
             <div className="col-12 col-md-6 col-lg-4 mb-3 mb-lg-0 d-flex">
               <div className="card w-100 shadow-sm d-flex flex-column">
-                <div className={`card-header ${darkMode ? 'bg-dark' : 'bg-white'}`}>
+                <div className="card-header">
                   <div className="d-flex justify-content-between align-items-center">
                     <h6 className="mb-0 fw-bold">
                       <i className="bi bi-diagram-3 me-2 text-primary"></i>
@@ -304,7 +324,7 @@ function App() {
                     </h6>
                     <div className="d-flex gap-2">
                       {/* Search input */}
-                      <div className="input-group input-group-sm" style={{ width: '150px' }}>
+                      <div className="input-group input-group-sm" style={{ width: '200px' }}>
                         <input
                           type="text"
                           className="form-control"
@@ -312,45 +332,57 @@ function App() {
                           value={searchTerm}
                           onChange={(e) => setSearchTerm(e.target.value)}
                         />
+                        <button
+                          onClick={() => setFilterMode(!filterMode)}
+                          className={`btn ${filterMode ? 'btn-primary' : 'btn-outline-secondary'}`}
+                          title={filterMode ? 'Show all (disable filter)' : 'Show only matches (enable filter)'}
+                        >
+                          <i className="bi bi-funnel"></i>
+                        </button>
                         <span className="input-group-text">
                           <i className="bi bi-search"></i>
                         </span>
                       </div>
-                      {/* View mode toggle */}
-                      <div className="btn-group btn-group-sm" role="group">
-                        <button
-                          className={`btn ${viewMode === 'tree' ? 'btn-primary' : 'btn-outline-primary'}`}
-                          onClick={() => setViewMode('tree')}
-                          title="Tree View"
-                        >
-                          <i className="bi bi-diagram-3"></i>
-                        </button>
-                        <button
-                          className={`btn ${viewMode === 'compact' ? 'btn-primary' : 'btn-outline-primary'}`}
-                          onClick={() => setViewMode('compact')}
-                          title="Compact View"
-                        >
-                          <i className="bi bi-braces"></i>
-                        </button>
-                        <button
-                          className={`btn ${viewMode === 'raw' ? 'btn-primary' : 'btn-outline-primary'}`}
-                          onClick={() => setViewMode('raw')}
-                          title="Raw JSON"
-                        >
-                          <i className="bi bi-code"></i>
-                        </button>
-                      </div>
                     </div>
                   </div>
                 </div>
-                <div className="card-body overflow-auto">
+                <div className="card-body overflow-hidden d-flex flex-column" style={{ height: 'calc(100vh - 230px)' }}>
                   {jsonData ? (
-                    <JsonTreeView
-                      data={jsonData}
-                      onPathSelect={setSelectedPath}
-                      searchTerm={searchTerm}
-                      viewMode={viewMode}
-                    />
+                    <>
+                      <div className="flex-grow-1 overflow-auto mb-3">
+                        <JsonTreeView
+                          data={jsonData}
+                          onPathSelect={setSelectedPath}
+                          searchTerm={searchTerm}
+                          viewMode={viewMode}
+                          filterMode={filterMode}
+                        />
+                      </div>
+
+                      {/* Language Examples at bottom */}
+                      <div className="border-top pt-3 flex-shrink-0" style={{ maxHeight: '200px', overflow: 'hidden' }}>
+                        {selectedPath.length > 0 ? (
+                          <div>
+                            <small className="text-muted d-block mb-2">
+                              <i className="bi bi-cursor me-1"></i>
+                              Selected: <code>{selectedPath.join('.')}</code>
+                            </small>
+                            <div style={{ maxHeight: '150px', overflow: 'auto' }}>
+                              <LanguageExamples
+                                path={selectedPath}
+                                onLanguagesChange={setSelectedLanguages}
+                              />
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="text-center text-muted py-3">
+                            <i className="bi bi-hand-index display-6 mb-2"></i>
+                            <p className="mb-1 small">Click any item above</p>
+                            <small>to see code examples for accessing that data</small>
+                          </div>
+                        )}
+                      </div>
+                    </>
                   ) : (
                     <div className="text-center text-muted py-5">
                       <i className="bi bi-inbox display-1 mb-3"></i>
@@ -362,10 +394,13 @@ function App() {
               </div>
             </div>
 
-            {/* Language Examples Panel */}
-            <div className="col-12 col-md-12 col-lg-4 d-flex">
-              <div className="card w-100 shadow-sm d-flex flex-column">
-                <LanguageExamples path={selectedPath} />
+            {/* AI Assistant Panel */}
+            <div className="col-12 col-md-12 col-lg-5 d-flex">
+              <div className="card w-100 shadow-sm d-flex flex-column" style={{ height: 'calc(100vh - 160px)' }}>
+                <AiAssistant
+                  jsonData={jsonData}
+                  selectedLanguages={selectedLanguages}
+                />
               </div>
             </div>
           </div>
@@ -373,24 +408,24 @@ function App() {
       </main>
 
       {/* Footer */}
-      <footer className={`${darkMode ? 'bg-dark' : 'bg-white'} border-top py-3`}>
+      <footer className={`${darkMode ? 'bg-dark' : 'bg-white'} border-top py-2`}>
         <div className="container-fluid">
           <div className="d-flex justify-content-between align-items-center">
-            <small className="text-muted">© 2024 JSON Path Navigator</small>
+            <small className="text-muted">© 2024 JSON Assistant</small>
             <div className="d-flex gap-3">
-              <a href="#" className="text-decoration-none text-muted small">
-                <i className="bi bi-book me-1"></i>Documentation
-              </a>
               <a href="https://github.com/dr-harper/jsonpaths" className="text-decoration-none text-muted small" target="_blank" rel="noopener noreferrer">
                 <i className="bi bi-github me-1"></i>GitHub
-              </a>
-              <a href="#" className="text-decoration-none text-muted small">
-                <i className="bi bi-life-preserver me-1"></i>Support
               </a>
             </div>
           </div>
         </div>
       </footer>
+
+      {/* Documentation Modal */}
+      <DocumentationModal
+        isOpen={showDocumentation}
+        onClose={() => setShowDocumentation(false)}
+      />
     </div>
   );
 }
