@@ -154,3 +154,20 @@ npm run build  # Creates optimized production build in dist/
 3. Test with various JSON structures
 4. Ensure responsive design works on mobile
 5. Update this document when adding major features
+
+## CRITICAL: Pre-Commit Checklist
+
+**ALWAYS run these checks before committing any changes:**
+
+1. **Build Test**: Run `npm run build` to ensure the production build succeeds
+   - Fix any TypeScript errors
+   - Fix any JSX syntax errors (especially `>` characters in JSX that need escaping as `&gt;`)
+   - Resolve any import/export issues
+
+2. **Development Server**: Verify the dev server runs without errors
+   - Check console for runtime errors
+   - Test the changed functionality
+
+3. **Type Check**: Run `npm run typecheck` if available, or rely on build process
+
+**Never commit code that fails to build!**

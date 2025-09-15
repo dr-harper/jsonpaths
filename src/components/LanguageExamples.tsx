@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react';
 interface LanguageExamplesProps {
   path: string[];
   onLanguagesChange?: (languages: LanguageConfig[]) => void;
+  onShowLanguageSettings?: () => void;
 }
 
 interface LanguageConfig {
@@ -13,7 +14,7 @@ interface LanguageConfig {
   getExample: (path: string[]) => string;
 }
 
-const LanguageExamples = ({ path, onLanguagesChange }: LanguageExamplesProps) => {
+const LanguageExamples = ({ path, onLanguagesChange, onShowLanguageSettings }: LanguageExamplesProps) => {
   const [showSettings, setShowSettings] = useState(false);
   const [copied, setCopied] = useState<string | null>(null);
 
@@ -193,6 +194,15 @@ const LanguageExamples = ({ path, onLanguagesChange }: LanguageExamplesProps) =>
     }
   }, [languages, onLanguagesChange]);
 
+  // Ensure initial enabled languages are sent to parent when languages are first loaded
+  useEffect(() => {
+    if (onLanguagesChange && languages.length > 0) {
+      const enabledLangs = languages.filter(lang => lang.enabled);
+      console.log('Initial enabled languages:', enabledLangs);
+      onLanguagesChange(enabledLangs);
+    }
+  }, [onLanguagesChange]); // Run when onLanguagesChange is available
+
   const toggleLanguage = (id: string) => {
     setLanguages(prev => prev.map(lang =>
       lang.id === id ? { ...lang, enabled: !lang.enabled } : lang
@@ -259,7 +269,7 @@ const LanguageExamples = ({ path, onLanguagesChange }: LanguageExamplesProps) =>
             <div className="d-flex justify-content-between align-items-center mb-1">
               <small className="text-muted">Code examples:</small>
               <button
-                onClick={() => setShowSettings(!showSettings)}
+                onClick={() => onShowLanguageSettings ? onShowLanguageSettings() : setShowSettings(!showSettings)}
                 className="btn btn-sm btn-outline-secondary px-2 py-0"
                 style={{ fontSize: '9px', height: '18px' }}
               >
