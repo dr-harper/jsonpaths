@@ -612,7 +612,7 @@ function App() {
                             <div style={{ maxHeight: '150px', overflow: 'auto' }}>
                               <LanguageExamples
                                 path={selectedPath}
-                                onLanguagesChange={setSelectedLanguages}
+                                selectedLanguages={selectedLanguages}
                                 onShowLanguageSettings={() => setShowLanguageSettings(true)}
                               />
                             </div>
