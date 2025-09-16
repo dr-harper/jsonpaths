@@ -235,7 +235,7 @@ function AppWorking() {
 
           {/* Language Examples Panel */}
           <div className="bg-white rounded-lg border border-gray-200 h-[500px] overflow-hidden">
-            <LanguageExamples path={selectedPath} />
+            <LanguageExamples path={selectedPath} selectedLanguages={[]} />
           </div>
         </div>
       </main>
