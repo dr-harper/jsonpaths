@@ -45,7 +45,7 @@ const LanguageExamples = ({ path, selectedLanguages, onShowLanguageSettings }: L
               </small>
               {onShowLanguageSettings && (
                 <button
-                  onClick={handleConfigureClick}
+                  onClick={onShowLanguageSettings}
                   className="btn btn-sm btn-outline-secondary px-2 py-0"
                   style={{ fontSize: '9px', height: '18px' }}
                 >
