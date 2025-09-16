@@ -16,12 +16,6 @@ interface LanguageOption {
 const LanguageExamples = ({ path, selectedLanguages, onShowLanguageSettings }: LanguageExamplesProps) => {
   const [copied, setCopied] = useState<string | null>(null);
 
-  const handleConfigureClick = () => {
-    if (onShowLanguageSettings) {
-      onShowLanguageSettings();
-    }
-  };
-
   const handleCopy = async (text: string, langId: string) => {
     try {
       await navigator.clipboard.writeText(text);
