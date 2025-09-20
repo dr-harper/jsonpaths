@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 
 type JsonData =
   | null
@@ -21,12 +21,86 @@ interface TreeNodeProps {
   path: string[];
   level: number;
   onPathSelect: (path: string[]) => void;
-  searchTerm?: string;
+  searchTerm: string;
+  normalizedSearchTerm: string;
   filterMode?: boolean;
   isLast?: boolean;
   parentExpanded?: boolean;
   selectedPath?: string[];
+  visiblePaths: Set<string> | null;
 }
+
+interface VisibilityIndexResult {
+  visiblePaths: Set<string>;
+  hasMatches: boolean;
+}
+
+const serializePath = (segments: readonly string[]): string => JSON.stringify(segments);
+
+const buildVisibilityIndex = (
+  node: JsonData,
+  normalizedSearchTerm: string
+): VisibilityIndexResult => {
+  const visiblePaths = new Set<string>();
+  const pathSegments: string[] = [];
+  let lowerPath = '';
+
+  const visitNode = (current: JsonData): boolean => {
+    const currentPathMatches =
+      lowerPath.length > 0 && lowerPath.includes(normalizedSearchTerm);
+
+    let valueMatches = false;
+    if (typeof current === 'string') {
+      valueMatches = current.toLowerCase().includes(normalizedSearchTerm);
+    }
+
+    let childMatches = false;
+    if (current && typeof current === 'object') {
+      if (Array.isArray(current)) {
+        for (let index = 0; index < current.length; index += 1) {
+          const segment = String(index);
+          const lowerSegment = segment.toLowerCase();
+          const previousLowerPath = lowerPath;
+          lowerPath = previousLowerPath
+            ? `${previousLowerPath}.${lowerSegment}`
+            : lowerSegment;
+          pathSegments.push(segment);
+          if (visitNode(current[index])) {
+            childMatches = true;
+          }
+          pathSegments.pop();
+          lowerPath = previousLowerPath;
+        }
+      } else {
+        for (const [key, value] of Object.entries(current)) {
+          const lowerKey = key.toLowerCase();
+          const previousLowerPath = lowerPath;
+          lowerPath = previousLowerPath
+            ? `${previousLowerPath}.${lowerKey}`
+            : lowerKey;
+          pathSegments.push(key);
+          if (visitNode(value)) {
+            childMatches = true;
+          }
+          pathSegments.pop();
+          lowerPath = previousLowerPath;
+        }
+      }
+    }
+
+    const isMatch = currentPathMatches || valueMatches || childMatches;
+
+    if (isMatch) {
+      visiblePaths.add(serializePath(pathSegments));
+    }
+
+    return isMatch;
+  };
+
+  const hasMatches = visitNode(node);
+
+  return { visiblePaths, hasMatches };
+};
 
 const TreeNode: React.FC<TreeNodeProps> = ({
   data,
@@ -34,9 +108,11 @@ const TreeNode: React.FC<TreeNodeProps> = ({
   level,
   onPathSelect,
   searchTerm,
+  normalizedSearchTerm,
   filterMode = false,
   isLast = false,
-  selectedPath = []
+  selectedPath = [],
+  visiblePaths
 }) => {
   const [isExpanded, setIsExpanded] = useState(true);
   const [copiedValue, setCopiedValue] = useState(false);
@@ -115,66 +191,54 @@ const TreeNode: React.FC<TreeNodeProps> = ({
   const dataType = getDataType(data);
   const isExpandable = dataType === 'object' || dataType === 'array';
 
-  // Check if this node should be visible when filtering
-  const shouldShowNode = (): boolean => {
-    if (!searchTerm || !filterMode) return true;
-
-    // Check if current path matches search term
-    const pathString = path.join('.').toLowerCase();
-    if (pathString.includes(searchTerm.toLowerCase())) return true;
-
-    // Check if current value matches search term
-    if (typeof data === 'string' && data.toLowerCase().includes(searchTerm.toLowerCase())) {
-      return true;
-    }
-
-    // Check if any child contains the search term (recursive check)
-    const hasMatchingChild = (obj: any, currentPath: string[] = []): boolean => {
-      if (typeof obj === 'string' && obj.toLowerCase().includes(searchTerm.toLowerCase())) {
-        return true;
-      }
-      if (typeof obj === 'object' && obj !== null) {
-        if (Array.isArray(obj)) {
-          return obj.some((item, index) =>
-            hasMatchingChild(item, [...currentPath, String(index)])
-          );
-        } else {
-          return Object.entries(obj).some(([key, value]) => {
-            const newPath = [...currentPath, key];
-            const pathStr = newPath.join('.').toLowerCase();
-            return pathStr.includes(searchTerm.toLowerCase()) || hasMatchingChild(value, newPath);
-          });
-        }
-      }
-      return false;
-    };
-
-    return hasMatchingChild(data, path);
-  };
+  const pathKey = serializePath(path);
+  const isFiltering = Boolean(searchTerm && filterMode && visiblePaths);
+  const isVisible = !isFiltering || visiblePaths?.has(pathKey);
 
   // Don't render if filtering is on and this node doesn't match
-  if (!shouldShowNode()) {
+  if (!isVisible) {
     return null;
   }
 
   // Highlight search matches
   const highlightMatch = (text: string): React.ReactElement => {
-    if (!searchTerm) return <>{text}</>;
+    if (!searchTerm) {
+      return <>{text}</>;
+    }
 
-    const regex = new RegExp(`(${searchTerm})`, 'gi');
-    const parts = text.split(regex);
+    const lowerText = text.toLowerCase();
+    const lowerSearch = normalizedSearchTerm;
+    const highlightedParts: React.ReactNode[] = [];
+    let searchStart = 0;
+    let matchIndex = lowerText.indexOf(lowerSearch, searchStart);
+    let partIndex = 0;
 
-    return (
-      <>
-        {parts.map((part, index) =>
-          regex.test(part) ? (
-            <mark key={index} className="bg-warning">{part}</mark>
-          ) : (
-            <span key={index}>{part}</span>
-          )
-        )}
-      </>
-    );
+    while (matchIndex !== -1) {
+      if (matchIndex > searchStart) {
+        highlightedParts.push(
+          <span key={`text-${partIndex}`}>{text.slice(searchStart, matchIndex)}</span>
+        );
+        partIndex += 1;
+      }
+
+      const matchText = text.slice(matchIndex, matchIndex + searchTerm.length);
+      highlightedParts.push(
+        <mark key={`mark-${partIndex}`} className="bg-warning">
+          {matchText}
+        </mark>
+      );
+      partIndex += 1;
+      searchStart = matchIndex + searchTerm.length;
+      matchIndex = lowerText.indexOf(lowerSearch, searchStart);
+    }
+
+    if (searchStart < text.length) {
+      highlightedParts.push(
+        <span key={`text-${partIndex}`}>{text.slice(searchStart)}</span>
+      );
+    }
+
+    return <>{highlightedParts}</>;
   };
 
   // Render value based on type
@@ -313,9 +377,11 @@ const TreeNode: React.FC<TreeNodeProps> = ({
                 level={level + 1}
                 onPathSelect={onPathSelect}
                 searchTerm={searchTerm}
+                normalizedSearchTerm={normalizedSearchTerm}
                 filterMode={filterMode}
                 isLast={index === data.length - 1}
                 selectedPath={selectedPath}
+                visiblePaths={visiblePaths}
               />
             ))
           ) : (
@@ -327,9 +393,11 @@ const TreeNode: React.FC<TreeNodeProps> = ({
                 level={level + 1}
                 onPathSelect={onPathSelect}
                 searchTerm={searchTerm}
+                normalizedSearchTerm={normalizedSearchTerm}
                 filterMode={filterMode}
                 isLast={index === arr.length - 1}
                 selectedPath={selectedPath}
+                visiblePaths={visiblePaths}
               />
             ))
           )}
@@ -347,6 +415,19 @@ const JsonTreeView: React.FC<JsonTreeViewProps> = ({
   filterMode = false
 }) => {
   const [selectedPath, setSelectedPath] = useState<string[]>([]);
+
+  const trimmedSearchTerm = searchTerm.trim();
+  const normalizedSearchTerm = trimmedSearchTerm.toLowerCase();
+
+  const { visiblePaths, hasMatches } = useMemo<{
+    visiblePaths: Set<string> | null;
+    hasMatches: boolean;
+  }>(() => {
+    if (!filterMode || !normalizedSearchTerm) {
+      return { visiblePaths: null, hasMatches: true };
+    }
+    return buildVisibilityIndex(data, normalizedSearchTerm);
+  }, [data, filterMode, normalizedSearchTerm]);
 
   const handlePathSelect = (path: string[]) => {
     setSelectedPath(path);
@@ -414,36 +495,7 @@ const JsonTreeView: React.FC<JsonTreeViewProps> = ({
   }
 
   // Check if we have any visible nodes when filtering
-  const hasVisibleNodes = (nodeData: JsonData, currentPath: string[] = []): boolean => {
-    if (!searchTerm || !filterMode) return true;
-
-    // Check if current path matches search term
-    const pathString = currentPath.join('.').toLowerCase();
-    if (pathString.includes(searchTerm.toLowerCase())) return true;
-
-    // Check if current value matches search term
-    if (typeof nodeData === 'string' && nodeData.toLowerCase().includes(searchTerm.toLowerCase())) {
-      return true;
-    }
-
-    // Check children recursively
-    if (typeof nodeData === 'object' && nodeData !== null) {
-      if (Array.isArray(nodeData)) {
-        return nodeData.some((item, index) =>
-          hasVisibleNodes(item, [...currentPath, String(index)])
-        );
-      } else {
-        return Object.entries(nodeData).some(([key, value]) => {
-          const newPath = [...currentPath, key];
-          const pathStr = newPath.join('.').toLowerCase();
-          return pathStr.includes(searchTerm.toLowerCase()) || hasVisibleNodes(value, newPath);
-        });
-      }
-    }
-    return false;
-  };
-
-  const showNoMatchesWarning = searchTerm && filterMode && !hasVisibleNodes(data);
+  const showNoMatchesWarning = Boolean(trimmedSearchTerm && filterMode && !hasMatches);
 
   // Tree view (default)
   return (
@@ -467,9 +519,11 @@ const JsonTreeView: React.FC<JsonTreeViewProps> = ({
             path={[]}
             level={0}
             onPathSelect={handlePathSelect}
-            searchTerm={searchTerm}
+            searchTerm={trimmedSearchTerm}
+            normalizedSearchTerm={normalizedSearchTerm}
             filterMode={filterMode}
             selectedPath={selectedPath}
+            visiblePaths={visiblePaths}
           />
         </div>
       )}
