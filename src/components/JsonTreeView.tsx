@@ -21,7 +21,8 @@ interface TreeNodeProps {
   path: string[];
   level: number;
   onPathSelect: (path: string[]) => void;
-  searchTerm?: string;
+  searchTerm: string;
+  normalizedSearchTerm: string;
   filterMode?: boolean;
   isLast?: boolean;
   parentExpanded?: boolean;
@@ -29,12 +30,72 @@ interface TreeNodeProps {
   visiblePaths: Set<string> | null;
 }
 
+interface VisibilityIndexResult {
+  visiblePaths: Set<string>;
+  hasMatches: boolean;
+}
+
+const serializePath = (segments: readonly string[]): string => JSON.stringify(segments);
+
+const buildVisibilityIndex = (
+  node: JsonData,
+  normalizedSearchTerm: string
+): VisibilityIndexResult => {
+  const visiblePaths = new Set<string>();
+  const pathSegments: string[] = [];
+
+  const visitNode = (current: JsonData, pathMatch: boolean): boolean => {
+    let childMatches = false;
+    let valueMatches = false;
+
+    if (typeof current === 'string') {
+      valueMatches = current.toLowerCase().includes(normalizedSearchTerm);
+    }
+
+    if (current && typeof current === 'object') {
+      if (Array.isArray(current)) {
+        for (let index = 0; index < current.length; index += 1) {
+          const segment = String(index);
+          pathSegments.push(segment);
+          const segmentMatches = segment.toLowerCase().includes(normalizedSearchTerm);
+          if (visitNode(current[index], pathMatch || segmentMatches)) {
+            childMatches = true;
+          }
+          pathSegments.pop();
+        }
+      } else {
+        for (const [key, value] of Object.entries(current)) {
+          pathSegments.push(key);
+          const segmentMatches = key.toLowerCase().includes(normalizedSearchTerm);
+          if (visitNode(value, pathMatch || segmentMatches)) {
+            childMatches = true;
+          }
+          pathSegments.pop();
+        }
+      }
+    }
+
+    const isMatch = pathMatch || valueMatches || childMatches;
+
+    if (isMatch) {
+      visiblePaths.add(serializePath(pathSegments));
+    }
+
+    return isMatch;
+  };
+
+  const hasMatches = visitNode(node, false);
+
+  return { visiblePaths, hasMatches };
+};
+
 const TreeNode: React.FC<TreeNodeProps> = ({
   data,
   path,
   level,
   onPathSelect,
   searchTerm,
+  normalizedSearchTerm,
   filterMode = false,
   isLast = false,
   selectedPath = [],
@@ -117,7 +178,7 @@ const TreeNode: React.FC<TreeNodeProps> = ({
   const dataType = getDataType(data);
   const isExpandable = dataType === 'object' || dataType === 'array';
 
-  const pathKey = JSON.stringify(path);
+  const pathKey = serializePath(path);
   const isFiltering = Boolean(searchTerm && filterMode && visiblePaths);
   const isVisible = !isFiltering || visiblePaths?.has(pathKey);
 
@@ -128,22 +189,43 @@ const TreeNode: React.FC<TreeNodeProps> = ({
 
   // Highlight search matches
   const highlightMatch = (text: string): React.ReactElement => {
-    if (!searchTerm) return <>{text}</>;
+    if (!searchTerm) {
+      return <>{text}</>;
+    }
 
-    const regex = new RegExp(`(${searchTerm})`, 'gi');
-    const parts = text.split(regex);
+    const lowerText = text.toLowerCase();
+    const lowerSearch = normalizedSearchTerm;
+    const highlightedParts: React.ReactNode[] = [];
+    let searchStart = 0;
+    let matchIndex = lowerText.indexOf(lowerSearch, searchStart);
+    let partIndex = 0;
 
-    return (
-      <>
-        {parts.map((part, index) =>
-          regex.test(part) ? (
-            <mark key={index} className="bg-warning">{part}</mark>
-          ) : (
-            <span key={index}>{part}</span>
-          )
-        )}
-      </>
-    );
+    while (matchIndex !== -1) {
+      if (matchIndex > searchStart) {
+        highlightedParts.push(
+          <span key={`text-${partIndex}`}>{text.slice(searchStart, matchIndex)}</span>
+        );
+        partIndex += 1;
+      }
+
+      const matchText = text.slice(matchIndex, matchIndex + searchTerm.length);
+      highlightedParts.push(
+        <mark key={`mark-${partIndex}`} className="bg-warning">
+          {matchText}
+        </mark>
+      );
+      partIndex += 1;
+      searchStart = matchIndex + searchTerm.length;
+      matchIndex = lowerText.indexOf(lowerSearch, searchStart);
+    }
+
+    if (searchStart < text.length) {
+      highlightedParts.push(
+        <span key={`text-${partIndex}`}>{text.slice(searchStart)}</span>
+      );
+    }
+
+    return <>{highlightedParts}</>;
   };
 
   // Render value based on type
@@ -282,6 +364,7 @@ const TreeNode: React.FC<TreeNodeProps> = ({
                 level={level + 1}
                 onPathSelect={onPathSelect}
                 searchTerm={searchTerm}
+                normalizedSearchTerm={normalizedSearchTerm}
                 filterMode={filterMode}
                 isLast={index === data.length - 1}
                 selectedPath={selectedPath}
@@ -297,6 +380,7 @@ const TreeNode: React.FC<TreeNodeProps> = ({
                 level={level + 1}
                 onPathSelect={onPathSelect}
                 searchTerm={searchTerm}
+                normalizedSearchTerm={normalizedSearchTerm}
                 filterMode={filterMode}
                 isLast={index === arr.length - 1}
                 selectedPath={selectedPath}
@@ -319,58 +403,18 @@ const JsonTreeView: React.FC<JsonTreeViewProps> = ({
 }) => {
   const [selectedPath, setSelectedPath] = useState<string[]>([]);
 
+  const trimmedSearchTerm = searchTerm.trim();
+  const normalizedSearchTerm = trimmedSearchTerm.toLowerCase();
+
   const { visiblePaths, hasMatches } = useMemo<{
     visiblePaths: Set<string> | null;
     hasMatches: boolean;
   }>(() => {
-    if (!filterMode || !searchTerm) {
+    if (!filterMode || !normalizedSearchTerm) {
       return { visiblePaths: null, hasMatches: true };
     }
-
-    const normalizedTerm = searchTerm.toLowerCase();
-    const computedVisiblePaths = new Set<string>();
-
-    const visitNode = (node: JsonData, currentPath: string[]): boolean => {
-      const pathKey = JSON.stringify(currentPath);
-      const pathString = currentPath.join('.').toLowerCase();
-
-      const matchesPath = pathString.includes(normalizedTerm);
-      const matchesValue =
-        typeof node === 'string' && node.toLowerCase().includes(normalizedTerm);
-
-      let childMatches = false;
-
-      if (node && typeof node === 'object') {
-        if (Array.isArray(node)) {
-          node.forEach((item, index) => {
-            if (visitNode(item, [...currentPath, String(index)])) {
-              childMatches = true;
-            }
-          });
-        } else {
-          Object.entries(node).forEach(([key, value]) => {
-            if (visitNode(value, [...currentPath, key])) {
-              childMatches = true;
-            }
-          });
-        }
-      }
-
-      if (matchesPath || matchesValue || childMatches) {
-        computedVisiblePaths.add(pathKey);
-        return true;
-      }
-
-      return false;
-    };
-
-    const hasAnyMatches = visitNode(data, []);
-
-    return {
-      visiblePaths: computedVisiblePaths,
-      hasMatches: hasAnyMatches
-    };
-  }, [data, filterMode, searchTerm]);
+    return buildVisibilityIndex(data, normalizedSearchTerm);
+  }, [data, filterMode, normalizedSearchTerm]);
 
   const handlePathSelect = (path: string[]) => {
     setSelectedPath(path);
@@ -438,7 +482,7 @@ const JsonTreeView: React.FC<JsonTreeViewProps> = ({
   }
 
   // Check if we have any visible nodes when filtering
-  const showNoMatchesWarning = Boolean(searchTerm && filterMode && !hasMatches);
+  const showNoMatchesWarning = Boolean(trimmedSearchTerm && filterMode && !hasMatches);
 
   // Tree view (default)
   return (
@@ -462,7 +506,8 @@ const JsonTreeView: React.FC<JsonTreeViewProps> = ({
             path={[]}
             level={0}
             onPathSelect={handlePathSelect}
-            searchTerm={searchTerm}
+            searchTerm={trimmedSearchTerm}
+            normalizedSearchTerm={normalizedSearchTerm}
             filterMode={filterMode}
             selectedPath={selectedPath}
             visiblePaths={visiblePaths}
