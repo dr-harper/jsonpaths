@@ -43,39 +43,52 @@ const buildVisibilityIndex = (
 ): VisibilityIndexResult => {
   const visiblePaths = new Set<string>();
   const pathSegments: string[] = [];
+  let lowerPath = '';
 
-  const visitNode = (current: JsonData, pathMatch: boolean): boolean => {
-    let childMatches = false;
+  const visitNode = (current: JsonData): boolean => {
+    const currentPathMatches =
+      lowerPath.length > 0 && lowerPath.includes(normalizedSearchTerm);
+
     let valueMatches = false;
-
     if (typeof current === 'string') {
       valueMatches = current.toLowerCase().includes(normalizedSearchTerm);
     }
 
+    let childMatches = false;
     if (current && typeof current === 'object') {
       if (Array.isArray(current)) {
         for (let index = 0; index < current.length; index += 1) {
           const segment = String(index);
+          const lowerSegment = segment.toLowerCase();
+          const previousLowerPath = lowerPath;
+          lowerPath = previousLowerPath
+            ? `${previousLowerPath}.${lowerSegment}`
+            : lowerSegment;
           pathSegments.push(segment);
-          const segmentMatches = segment.toLowerCase().includes(normalizedSearchTerm);
-          if (visitNode(current[index], pathMatch || segmentMatches)) {
+          if (visitNode(current[index])) {
             childMatches = true;
           }
           pathSegments.pop();
+          lowerPath = previousLowerPath;
         }
       } else {
         for (const [key, value] of Object.entries(current)) {
+          const lowerKey = key.toLowerCase();
+          const previousLowerPath = lowerPath;
+          lowerPath = previousLowerPath
+            ? `${previousLowerPath}.${lowerKey}`
+            : lowerKey;
           pathSegments.push(key);
-          const segmentMatches = key.toLowerCase().includes(normalizedSearchTerm);
-          if (visitNode(value, pathMatch || segmentMatches)) {
+          if (visitNode(value)) {
             childMatches = true;
           }
           pathSegments.pop();
+          lowerPath = previousLowerPath;
         }
       }
     }
 
-    const isMatch = pathMatch || valueMatches || childMatches;
+    const isMatch = currentPathMatches || valueMatches || childMatches;
 
     if (isMatch) {
       visiblePaths.add(serializePath(pathSegments));
@@ -84,7 +97,7 @@ const buildVisibilityIndex = (
     return isMatch;
   };
 
-  const hasMatches = visitNode(node, false);
+  const hasMatches = visitNode(node);
 
   return { visiblePaths, hasMatches };
 };
