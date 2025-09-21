@@ -17,8 +17,8 @@ const Header = () => {
             <path d="M8 11v10M24 11v10M11 8h10M11 24h10M11 16h10" stroke="#06B6D4" strokeWidth="1.5"/>
           </svg>
           <div>
-            <h1 className="text-2xl font-bold">PyPath JSON Navigator</h1>
-            <p className="text-sm text-blue-100">Navigate JSON, Extract Python Paths</p>
+            <h1 className="text-2xl font-bold">JSON Path Navigator</h1>
+            <p className="text-sm text-blue-100">Navigate JSON, Generate Multi-Language Paths</p>
           </div>
         </div>
         <div className="text-sm text-blue-100">
