@@ -61,8 +61,8 @@ Clicking on "name" generates:
 🐘 PHP: $data['user']['profile']['name']
 ☕ Java (JsonNode): data.path("user").path("profile").path("name")
 🔷 C#: data["user"]["profile"]["name"]
-🐹 Go: data.(map[string]any)["user"].(map[string]any)["profile"].(map[string]any)["name"]
+🐹 Go (using map[string]any): data.(map[string]any)["user"].(map[string]any)["profile"].(map[string]any)["name"]
 🦀 Rust: data["user"]["profile"]["name"]
 🐦 Swift: data["user"]["profile"]["name"]
-🎯 Kotlin: data.jsonObject["user"]?.jsonObject?.get("profile")?.jsonObject?.get("name")
+🎯 Kotlin (kotlinx.serialization): data.jsonObject["user"]?.jsonObject["profile"]?.jsonObject["name"]
 ```
