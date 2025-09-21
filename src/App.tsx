@@ -13,6 +13,99 @@ type JsonData =
   | JsonData[]
   | { [key: string]: JsonData };
 
+const isNumericKey = (key: string) => /^\d+$/.test(key);
+const isJavaScriptIdentifier = (key: string) => /^[A-Za-z_$][A-Za-z0-9_$]*$/.test(key);
+const escapeSingleQuotes = (value: string) =>
+  value.replaceAll('\\', '\\\\').replaceAll("'", "\\'");
+const escapeDoubleQuotes = (value: string) =>
+  value.replaceAll('\\', '\\\\').replaceAll('"', '\\"');
+const SINGLE_QUOTE = "'";
+const DOUBLE_QUOTE = '"';
+
+const buildBracketPath = (
+  root: string,
+  segments: string[],
+  quote: string,
+  escapeFn: (value: string) => string
+) =>
+  segments.reduce((acc, key) => {
+    if (isNumericKey(key)) {
+      return `${acc}[${key}]`;
+    }
+    return `${acc}[${quote}${escapeFn(key)}${quote}]`;
+  }, root);
+
+const buildJavaScriptPath = (root: string, segments: string[]) =>
+  segments.reduce((acc, key) => {
+    if (isNumericKey(key)) {
+      return `${acc}[${key}]`;
+    }
+    if (isJavaScriptIdentifier(key)) {
+      return `${acc}.${key}`;
+    }
+    return `${acc}['${escapeSingleQuotes(key)}']`;
+  }, root);
+
+const buildRubyDigPath = (root: string, segments: string[]) => {
+  const args = segments
+    .map(segment => (isNumericKey(segment) ? segment : `'${escapeSingleQuotes(segment)}'`))
+    .join(', ');
+  return `${root}.dig(${args})`;
+};
+
+const buildJavaPath = (root: string, segments: string[]) =>
+  segments.reduce((acc, key) => {
+    if (isNumericKey(key)) {
+      return `${acc}.path(${key})`;
+    }
+    return `${acc}.path("${escapeDoubleQuotes(key)}")`;
+  }, root);
+
+const buildGoPath = (root: string, segments: string[]) =>
+  segments.reduce((acc, key) => {
+    if (isNumericKey(key)) {
+      return `${acc}.([]any)[${key}]`;
+    }
+    return `${acc}.(map[string]any)["${escapeDoubleQuotes(key)}"]`;
+  }, root);
+
+const buildKotlinPath = (root: string, segments: string[]) =>
+  segments.reduce((acc, key, index) => {
+    if (isNumericKey(key)) {
+      if (index === 0) {
+        return `${acc}.jsonArray[${key}]`;
+      }
+      // For safe-chained array access, .get() is necessary as list?.[index] is not valid.
+      return `${acc}?.jsonArray?.get(${key})`;
+    }
+
+    const accessor = index === 0 ? '.jsonObject' : '?.jsonObject';
+    // Using bracket notation for object access is more idiomatic in Kotlin for JsonObject.
+    return `${acc}${accessor}["${escapeDoubleQuotes(key)}"]`;
+  }, root);
+
+type PathGenerator = (segments: string[], root: string) => string;
+
+const languageRoots: Record<string, string> = {
+  php: '$data'
+};
+
+const defaultGenerator: PathGenerator = (segments, root) =>
+  buildBracketPath(root, segments, DOUBLE_QUOTE, escapeDoubleQuotes);
+
+const languageGenerators: Record<string, PathGenerator> = {
+  python: (segments, root) => buildBracketPath(root, segments, SINGLE_QUOTE, escapeSingleQuotes),
+  javascript: (segments, root) => buildJavaScriptPath(root, segments),
+  swift: (segments, root) => buildBracketPath(root, segments, DOUBLE_QUOTE, escapeDoubleQuotes),
+  ruby: (segments, root) => buildRubyDigPath(root, segments),
+  php: (segments, root) => buildBracketPath(root, segments, SINGLE_QUOTE, escapeSingleQuotes),
+  java: (segments, root) => buildJavaPath(root, segments),
+  csharp: (segments, root) => buildBracketPath(root, segments, DOUBLE_QUOTE, escapeDoubleQuotes),
+  go: (segments, root) => buildGoPath(root, segments),
+  rust: (segments, root) => buildBracketPath(root, segments, DOUBLE_QUOTE, escapeDoubleQuotes),
+  kotlin: (segments, root) => buildKotlinPath(root, segments)
+};
+
 function App() {
   const [jsonInput, setJsonInput] = useState<string>('');
   const [jsonData, setJsonData] = useState<JsonData | null>(null);
@@ -42,55 +135,14 @@ function App() {
   // Helper function to create language object with getExample function
   const createLanguageObject = (id: string, name: string, icon: string) => {
     const generatePath = (pathArray: string[], language: string): string => {
+      const rootIdentifier = languageRoots[language] ?? 'data';
+
       if (pathArray.length === 0) {
-        switch(language) {
-          case 'python': return 'data';
-          case 'javascript': return 'data';
-          case 'ruby': return 'data';
-          case 'php': return '$data';
-          case 'java': return 'data';
-          case 'csharp': return 'data';
-          case 'go': return 'data';
-          case 'rust': return 'data';
-          case 'swift': return 'data';
-          case 'kotlin': return 'data';
-          default: return 'data';
-        }
+        return rootIdentifier;
       }
 
-      switch(language) {
-        case 'python':
-          return pathArray.reduce((acc, key) => {
-            if (/^\d+$/.test(key)) {
-              return `${acc}[${key}]`;
-            } else {
-              return `${acc}['${key}']`;
-            }
-          }, 'data');
-
-        case 'javascript':
-          return pathArray.reduce((acc, key) => {
-            if (/^\d+$/.test(key)) {
-              return `${acc}[${key}]`;
-            } else if (/^[a-zA-Z_$][a-zA-Z0-9_$]*$/.test(key)) {
-              return `${acc}.${key}`;
-            } else {
-              return `${acc}['${key}']`;
-            }
-          }, 'data');
-
-        case 'swift':
-          return pathArray.reduce((acc, key) => {
-            if (/^\d+$/.test(key)) {
-              return `${acc}[${key}]`;
-            } else {
-              return `${acc}["${key}"]`;
-            }
-          }, 'data');
-
-        default:
-          return `// ${language} path access: ${pathArray.join('.')}`;
-      }
+      const generator = languageGenerators[language] ?? defaultGenerator;
+      return generator(pathArray, rootIdentifier);
     };
 
     return {
