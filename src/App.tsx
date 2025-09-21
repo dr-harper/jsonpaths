@@ -75,11 +75,13 @@ const buildKotlinPath = (root: string, segments: string[]) =>
       if (index === 0) {
         return `${acc}.jsonArray[${key}]`;
       }
+      // For safe-chained array access, .get() is necessary as list?.[index] is not valid.
       return `${acc}?.jsonArray?.get(${key})`;
     }
 
     const accessor = index === 0 ? '.jsonObject' : '?.jsonObject';
-    return `${acc}${accessor}?.get("${escapeDoubleQuotes(key)}")`;
+    // Using bracket notation for object access is more idiomatic in Kotlin for JsonObject.
+    return `${acc}${accessor}["${escapeDoubleQuotes(key)}"]`;
   }, root);
 
 type PathGenerator = (segments: string[], root: string) => string;
