@@ -19,6 +19,213 @@ interface QueryResult {
   postProcessingNote?: string;
 }
 
+interface CachedQueryData {
+  question: string;
+  explanation: string;
+  jsonPath: string;
+  reasoning: string;
+  results: any[];
+  requiresPostProcessing: boolean;
+  postProcessingNote?: string;
+  jsonPathError?: string | null;
+}
+
+const buildCodeExamples = (
+  cache: CachedQueryData,
+  languages: AiAssistantProps['selectedLanguages']
+): Array<{language: string, icon: string, code: string}> => {
+  const { jsonPath, question } = cache;
+  const questionLower = question.toLowerCase();
+
+  return languages.map(lang => {
+    const hasFilter = jsonPath.includes('?(@');
+    const isComplexQuery =
+      questionLower.includes('cheapest') ||
+      questionLower.includes('most expensive') ||
+      questionLower.includes('minimum price') ||
+      questionLower.includes('maximum price');
+
+    const handleComplexAggregation = (language: string): string | null => {
+      if (!isComplexQuery || !jsonPath.includes('products[*]')) {
+        return null;
+      }
+
+      switch (language) {
+        case 'Python':
+          if (questionLower.includes('cheapest') || questionLower.includes('minimum price')) {
+            return `min(data['products'], key=lambda x: x.get('price', float('inf')))`;
+          }
+          if (questionLower.includes('most expensive') || questionLower.includes('maximum price')) {
+            return `max(data['products'], key=lambda x: x.get('price', 0))`;
+          }
+          break;
+        case 'JavaScript':
+          if (questionLower.includes('cheapest') || questionLower.includes('minimum price')) {
+            return `data.products.reduce((min, product) =>
+    product.price < min.price ? product : min
+)`;
+          }
+          if (questionLower.includes('most expensive') || questionLower.includes('maximum price')) {
+            return `data.products.reduce((max, product) =>
+    product.price > max.price ? product : max
+)`;
+          }
+          break;
+        case 'Swift':
+          if (questionLower.includes('cheapest') || questionLower.includes('minimum price')) {
+            return `data["products"]?.min {
+    ($0["price"] as? Double ?? Double.infinity) <
+    ($1["price"] as? Double ?? Double.infinity)
+}`;
+          }
+          if (questionLower.includes('most expensive') || questionLower.includes('maximum price')) {
+            return `data["products"]?.max {
+    ($0["price"] as? Double ?? 0) <
+    ($1["price"] as? Double ?? 0)
+}`;
+          }
+          break;
+        default:
+          if (questionLower.includes('cheapest') || questionLower.includes('minimum price')) {
+            return `// Find item with minimum price\n// Implementation varies by language`;
+          }
+          if (questionLower.includes('most expensive') || questionLower.includes('maximum price')) {
+            return `// Find item with maximum price\n// Implementation varies by language`;
+          }
+          break;
+      }
+
+      return null;
+    };
+
+    const buildArrayIterationCode = (language: string, arrayPath: string, fieldPath?: string): string | null => {
+      switch (language) {
+        case 'Python':
+          if (fieldPath) {
+            const fieldAccess = fieldPath.split('.').map(f => `['${f}']`).join('');
+            return `[item${fieldAccess} for item in data['${arrayPath}']]`;
+          }
+          return `data['${arrayPath}']`;
+        case 'JavaScript':
+          if (fieldPath) {
+            const fieldAccess = fieldPath.split('.').map(f => `.${f}`).join('');
+            return `data.${arrayPath}.map(item => item${fieldAccess})`;
+          }
+          return `data.${arrayPath}`;
+        case 'Swift':
+          if (fieldPath) {
+            const fieldAccess = fieldPath.split('.').map(f => `["${f}"]`).join('');
+            return `data["${arrayPath}"]?.compactMap { $0${fieldAccess} }`;
+          }
+          return `data["${arrayPath}"]`;
+        default:
+          return `// Iterate through ${arrayPath} array${fieldPath ? ` and access ${fieldPath}` : ''}`;
+      }
+    };
+
+    const simplePathSegments = jsonPath
+      .replace(/^\$\./, '')
+      .replace(/\[(\d+)\]/g, '.$1')
+      .replace(/\[\*\]/g, '')
+      .split('.')
+      .filter(Boolean);
+
+    const generateCode = (): string => {
+      if (!hasFilter) {
+        const aggregationCode = handleComplexAggregation(lang.name);
+        if (aggregationCode) {
+          return aggregationCode;
+        }
+
+        if (jsonPath.includes('[*]')) {
+          const pathMatch = jsonPath.match(/^\$\.(.+?)\[\*\](?:\.(.+))?$/);
+          if (pathMatch) {
+            const [, arrayPath, fieldPath] = pathMatch;
+            const arrayCode = buildArrayIterationCode(lang.name, arrayPath, fieldPath);
+            if (arrayCode) {
+              return arrayCode;
+            }
+          }
+        }
+
+        return lang.getExample(simplePathSegments);
+      }
+
+      switch (lang.name) {
+        case 'Python':
+          if (jsonPath.includes('price > 100')) {
+            return `[product['name'] for product in data['products'] if product['price'] > 100]`;
+          }
+          if (jsonPath.includes('inStock == true')) {
+            return `[item for item in data['products'] if item.get('inStock') == True]`;
+          }
+          if (jsonPath.includes('products[*]')) {
+            const aggregationCode = handleComplexAggregation('Python');
+            if (aggregationCode) {
+              return aggregationCode;
+            }
+            return `[item['name'] for item in data['products']]`;
+          }
+          return `# Filter products based on condition\n[item for item in data if condition(item)]`;
+        case 'JavaScript':
+          if (jsonPath.includes('price > 100')) {
+            return `data.products.filter(product => product.price > 100).map(product => product.name)`;
+          }
+          if (jsonPath.includes('inStock == true')) {
+            return `data.products.filter(item => item.inStock === true)`;
+          }
+          if (jsonPath.includes('products[*]')) {
+            const aggregationCode = handleComplexAggregation('JavaScript');
+            if (aggregationCode) {
+              return aggregationCode;
+            }
+            return `data.products.map(item => item.name)`;
+          }
+          return `data.products.filter(item => /* condition */).map(item => item.property)`;
+        case 'Swift':
+          if (jsonPath.includes('price > 100')) {
+            return `data["products"]?.compactMap { product in
+    guard let price = product["price"] as? Double, price > 100 else { return nil }
+    return product["name"] as? String
+}`;
+          }
+          if (jsonPath.includes('inStock == true')) {
+            return `data["products"]?.filter { ($0["inStock"] as? Bool) == true }`;
+          }
+          if (jsonPath.includes('products[*]')) {
+            const aggregationCode = handleComplexAggregation('Swift');
+            if (aggregationCode) {
+              return aggregationCode;
+            }
+          }
+          return `data["products"]?.filter { /* condition */ }`;
+        default:
+          const aggregationCode = handleComplexAggregation(lang.name);
+          if (aggregationCode) {
+            return aggregationCode;
+          }
+          const fallbackPath = jsonPath
+            .replace(/^\$\./, '')
+            .replace(/\[(\d+)\]/g, '.$1')
+            .replace(/\[\?\([^\)]+\)\]/g, '[*]')
+            .replace(/\[\*\]/g, '')
+            .split('.')
+            .filter(Boolean);
+          return lang.getExample(fallbackPath);
+      }
+    };
+
+    const code = generateCode();
+    const finalCode = code || `// ${lang.name} code example would go here\n// JSONPath: ${jsonPath}`;
+
+    return {
+      language: lang.name,
+      icon: lang.icon,
+      code: finalCode
+    };
+  });
+};
+
 const AiAssistant = ({ jsonData, selectedLanguages, onShowLanguageSettings }: AiAssistantProps) => {
   const [query, setQuery] = useState('');
   const [result, setResult] = useState<QueryResult | null>(null);
@@ -30,18 +237,44 @@ const AiAssistant = ({ jsonData, selectedLanguages, onShowLanguageSettings }: Ai
   const [debugMode, setDebugMode] = useState(false);
   const [lastError, setLastError] = useState<any>(null);
   const [lastSuccessfulQuery, setLastSuccessfulQuery] = useState<string>('');
+  const [lastSuccessfulJsonPath, setLastSuccessfulJsonPath] = useState<string>('');
+  const [cachedQueryData, setCachedQueryData] = useState<CachedQueryData | null>(null);
 
   useEffect(() => {
     localStorage.setItem('gemini-api-key', apiKey);
   }, [apiKey]);
 
-  // Rerun the last query when languages change
   useEffect(() => {
-    if (lastSuccessfulQuery && result && selectedLanguages.length > 0) {
-      // Only rerun if we have a previous successful query and result
-      handleSubmit(lastSuccessfulQuery);
+    if (!cachedQueryData || !lastSuccessfulJsonPath || !lastSuccessfulQuery) {
+      return;
     }
-  }, [selectedLanguages]); // eslint-disable-line react-hooks/exhaustive-deps
+
+    if (selectedLanguages.length === 0) {
+      return;
+    }
+
+    const updatedCodeExamples = buildCodeExamples(cachedQueryData, selectedLanguages);
+
+    setResult(prev => {
+      if (!prev) {
+        return {
+          explanation: cachedQueryData.explanation,
+          jsonPath: cachedQueryData.jsonPath,
+          reasoning: cachedQueryData.reasoning,
+          results: cachedQueryData.results,
+          codeExamples: updatedCodeExamples,
+          jsonPathError: cachedQueryData.jsonPathError,
+          requiresPostProcessing: cachedQueryData.requiresPostProcessing,
+          postProcessingNote: cachedQueryData.postProcessingNote
+        };
+      }
+
+      return {
+        ...prev,
+        codeExamples: updatedCodeExamples
+      };
+    });
+  }, [cachedQueryData, lastSuccessfulJsonPath, lastSuccessfulQuery, selectedLanguages]);
 
   const generateDynamicQuestions = (data: any): string[] => {
     if (!data) return [];
@@ -235,6 +468,9 @@ Respond only with the JSON object, no additional text.`;
 
     setIsLoading(true);
     setResult(null);
+    setCachedQueryData(null);
+    setLastSuccessfulJsonPath('');
+    setLastSuccessfulQuery('');
 
     try {
       if (!jsonData) {
@@ -292,245 +528,33 @@ Respond only with the JSON object, no additional text.`;
         results = expensive ? [expensive] : [];
       }
 
-      // Generate code examples for selected languages with filtering logic
-      console.log('selectedLanguages:', selectedLanguages);
-      console.log('selectedLanguages length:', selectedLanguages.length);
-
-      const codeExamples = selectedLanguages.map(lang => {
-        const jsonPath = parsedResponse.jsonPath;
-
-        // Generate filtering code based on language and JSONPath
-        const generateFilteringCode = (language: string, jsonPath: string): string => {
-          console.log('Generating code for:', language, 'with JSONPath:', jsonPath);
-
-          // Check if JSONPath contains filtering logic
-          const hasFilter = jsonPath.includes('?(@');
-
-          if (!hasFilter) {
-            // Check if this is a complex query that needs aggregation logic
-            const isComplexQuery = question.toLowerCase().includes('cheapest') ||
-                                  question.toLowerCase().includes('most expensive') ||
-                                  question.toLowerCase().includes('minimum price') ||
-                                  question.toLowerCase().includes('maximum price');
-
-            if (isComplexQuery && jsonPath.includes('products[*]')) {
-              // Generate aggregation code for complex queries
-              switch (language) {
-                case 'Python':
-                  if (question.toLowerCase().includes('cheapest') || question.toLowerCase().includes('minimum price')) {
-                    return `min(data['products'], key=lambda x: x.get('price', float('inf')))`;
-                  } else if (question.toLowerCase().includes('most expensive') || question.toLowerCase().includes('maximum price')) {
-                    return `max(data['products'], key=lambda x: x.get('price', 0))`;
-                  }
-                  break;
-                case 'JavaScript':
-                  if (question.toLowerCase().includes('cheapest') || question.toLowerCase().includes('minimum price')) {
-                    return `data.products.reduce((min, product) =>
-    product.price < min.price ? product : min
-)`;
-                  } else if (question.toLowerCase().includes('most expensive') || question.toLowerCase().includes('maximum price')) {
-                    return `data.products.reduce((max, product) =>
-    product.price > max.price ? product : max
-)`;
-                  }
-                  break;
-                case 'Swift':
-                  if (question.toLowerCase().includes('cheapest') || question.toLowerCase().includes('minimum price')) {
-                    return `data["products"]?.min {
-    ($0["price"] as? Double ?? Double.infinity) <
-    ($1["price"] as? Double ?? Double.infinity)
-}`;
-                  } else if (question.toLowerCase().includes('most expensive') || question.toLowerCase().includes('maximum price')) {
-                    return `data["products"]?.max {
-    ($0["price"] as? Double ?? 0) <
-    ($1["price"] as? Double ?? 0)
-}`;
-                  }
-                  break;
-              }
-            }
-
-            // Check if this is an array wildcard query
-            const hasArrayWildcard = jsonPath.includes('[*]');
-
-            if (hasArrayWildcard) {
-              // Extract the array path and the field after the wildcard
-              const pathMatch = jsonPath.match(/^\$\.(.+?)\[\*\](?:\.(.+))?$/);
-
-              if (pathMatch) {
-                const arrayPath = pathMatch[1];
-                const fieldPath = pathMatch[2];
-
-                console.log('Array wildcard detected:', { arrayPath, fieldPath });
-
-                // Generate array iteration code
-                switch (language) {
-                  case 'Python':
-                    if (fieldPath) {
-                      // Accessing a field from each array element
-                      const fieldAccess = fieldPath.split('.').map(f => `['${f}']`).join('');
-                      return `[item${fieldAccess} for item in data['${arrayPath}']]`;
-                    } else {
-                      // Just getting all array elements
-                      return `data['${arrayPath}']`;
-                    }
-
-                  case 'JavaScript':
-                    if (fieldPath) {
-                      // Accessing nested fields
-                      const fieldAccess = fieldPath.split('.').map(f => `.${f}`).join('');
-                      return `data.${arrayPath}.map(item => item${fieldAccess})`;
-                    } else {
-                      return `data.${arrayPath}`;
-                    }
-
-                  case 'Swift':
-                    if (fieldPath) {
-                      const fieldAccess = fieldPath.split('.').map(f => `["${f}"]`).join('');
-                      return `data["${arrayPath}"]?.compactMap { $0${fieldAccess} }`;
-                    } else {
-                      return `data["${arrayPath}"]`;
-                    }
-
-                  default:
-                    // For other languages, show a comment
-                    return `// Iterate through ${arrayPath} array${fieldPath ? ` and access ${fieldPath}` : ''}`;
-                }
-              }
-            }
-
-            // Simple path access without array wildcards
-            const simplePath = jsonPath
-              .replace(/^\$\./, '')
-              .replace(/\[(\d+)\]/g, '.$1')
-              .replace(/\[\*\]/g, '')
-              .split('.')
-              .filter(Boolean);
-            console.log('Simple path for', language, ':', simplePath);
-            return lang.getExample(simplePath);
-          }
-
-          // Extract filtering logic for different languages
-          console.log('Has filter, language is:', language);
-          switch (language) {
-            case 'Python':
-              if (jsonPath.includes('price > 100')) {
-                return `[product['name'] for product in data['products'] if product['price'] > 100]`;
-              } else if (jsonPath.includes('inStock == true')) {
-                return `[item for item in data['products'] if item.get('inStock') == True]`;
-              } else if (jsonPath.includes('products[*]')) {
-                // Check if this is for finding cheapest/most expensive
-                if (question.toLowerCase().includes('cheapest') || question.toLowerCase().includes('minimum price')) {
-                  return `min(data['products'], key=lambda x: x.get('price', float('inf')))`;
-                } else if (question.toLowerCase().includes('most expensive') || question.toLowerCase().includes('maximum price')) {
-                  return `max(data['products'], key=lambda x: x.get('price', 0))`;
-                }
-                return `[item['name'] for item in data['products']]`;
-              }
-              return `# Filter products based on condition\n[item for item in data if condition(item)]`;
-
-            case 'JavaScript':
-              if (jsonPath.includes('price > 100')) {
-                return `data.products.filter(product => product.price > 100).map(product => product.name)`;
-              } else if (jsonPath.includes('inStock == true')) {
-                return `data.products.filter(item => item.inStock === true)`;
-              } else if (jsonPath.includes('products[*]')) {
-                // Check if this is for finding cheapest/most expensive
-                if (question.toLowerCase().includes('cheapest') || question.toLowerCase().includes('minimum price')) {
-                  return `data.products.reduce((min, product) =>
-    product.price < min.price ? product : min
-)`;
-                } else if (question.toLowerCase().includes('most expensive') || question.toLowerCase().includes('maximum price')) {
-                  return `data.products.reduce((max, product) =>
-    product.price > max.price ? product : max
-)`;
-                }
-                return `data.products.map(item => item.name)`;
-              }
-              return `data.products.filter(item => /* condition */).map(item => item.property)`;
-
-            case 'Swift':
-              if (jsonPath.includes('price > 100')) {
-                return `data["products"]?.compactMap { product in
-    guard let price = product["price"] as? Double, price > 100 else { return nil }
-    return product["name"] as? String
-}`;
-              } else if (jsonPath.includes('inStock == true')) {
-                return `data["products"]?.filter { ($0["inStock"] as? Bool) == true }`;
-              } else if (jsonPath.includes('products[*]')) {
-                // Check if this is for finding cheapest/most expensive
-                if (question.toLowerCase().includes('cheapest') || question.toLowerCase().includes('minimum price')) {
-                  return `data["products"]?.min {
-    ($0["price"] as? Double ?? Double.infinity) <
-    ($1["price"] as? Double ?? Double.infinity)
-}`;
-                } else if (question.toLowerCase().includes('most expensive') || question.toLowerCase().includes('maximum price')) {
-                  return `data["products"]?.max {
-    ($0["price"] as? Double ?? 0) <
-    ($1["price"] as? Double ?? 0)
-}`;
-                }
-              }
-              return `data["products"]?.filter { /* condition */ }`;
-
-            default:
-              console.log('Using default case for:', language);
-
-              // Check if this is a complex query that needs aggregation logic for other languages
-              const isComplexQuery = question.toLowerCase().includes('cheapest') ||
-                                    question.toLowerCase().includes('most expensive') ||
-                                    question.toLowerCase().includes('minimum price') ||
-                                    question.toLowerCase().includes('maximum price');
-
-              if (isComplexQuery && jsonPath.includes('products[*]')) {
-                // Generate basic aggregation code for other languages
-                if (question.toLowerCase().includes('cheapest') || question.toLowerCase().includes('minimum price')) {
-                  return `// Find item with minimum price\n// Implementation varies by language`;
-                } else if (question.toLowerCase().includes('most expensive') || question.toLowerCase().includes('maximum price')) {
-                  return `// Find item with maximum price\n// Implementation varies by language`;
-                }
-              }
-
-              // Fallback to simple path for other languages
-              const simplePath = jsonPath
-                .replace(/^\$\./, '')
-                .replace(/\[(\d+)\]/g, '.$1')
-                .replace(/\[\?\([^\)]+\)\]/g, '[*]')
-                .replace(/\[\*\]/g, '')
-                .split('.')
-                .filter(Boolean);
-              return lang.getExample(simplePath);
-          }
-        };
-
-        const code = generateFilteringCode(lang.name, jsonPath);
-        console.log('Final code for', lang.name, ':', code);
-
-        // Ensure we always have some code to show
-        const finalCode = code || `// ${lang.name} code example would go here\n// JSONPath: ${jsonPath}`;
-
-        return {
-          language: lang.name,
-          icon: lang.icon,
-          code: finalCode
-        };
-      });
-
-      console.log('All code examples:', codeExamples);
-
-      setResult({
+      const cachedPayload: CachedQueryData = {
+        question,
         explanation: parsedResponse.explanation,
         jsonPath: parsedResponse.jsonPath,
         reasoning: parsedResponse.reasoning,
-        results: results,
+        results,
+        requiresPostProcessing,
+        postProcessingNote,
+        jsonPathError
+      };
+
+      const codeExamples = buildCodeExamples(cachedPayload, selectedLanguages);
+
+      setResult({
+        explanation: cachedPayload.explanation,
+        jsonPath: cachedPayload.jsonPath,
+        reasoning: cachedPayload.reasoning,
+        results: cachedPayload.results,
         codeExamples: codeExamples,
-        jsonPathError: jsonPathError,
-        requiresPostProcessing: requiresPostProcessing,
-        postProcessingNote: postProcessingNote
+        jsonPathError: cachedPayload.jsonPathError,
+        requiresPostProcessing: cachedPayload.requiresPostProcessing,
+        postProcessingNote: cachedPayload.postProcessingNote
       });
 
-      // Save the successful query
+      setCachedQueryData(cachedPayload);
       setLastSuccessfulQuery(question);
+      setLastSuccessfulJsonPath(cachedPayload.jsonPath);
 
     } catch (error) {
       setLastError(error);
@@ -548,6 +572,9 @@ Respond only with the JSON object, no additional text.`;
         codeExamples: [],
         error: errorMsg
       });
+      setCachedQueryData(null);
+      setLastSuccessfulJsonPath('');
+      setLastSuccessfulQuery('');
     } finally {
       setIsLoading(false);
     }
@@ -557,6 +584,8 @@ Respond only with the JSON object, no additional text.`;
     setResult(null);
     setQuery('');
     setLastSuccessfulQuery('');
+    setLastSuccessfulJsonPath('');
+    setCachedQueryData(null);
   };
 
   return (
