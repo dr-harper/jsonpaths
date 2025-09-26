@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react';
 import LanguageExamples from './components/LanguageExamples';
-import JsonTreeView from './components/JsonTreeView';
 import AiAssistant from './components/AiAssistant';
 import DocumentationModal from './components/DocumentationModal';
 import DiffChecker from './components/DiffChecker';
+import JsonFormatter from './components/JsonFormatter';
+import JsonTreeView from './components/JsonTreeView';
 
 type JsonData =
   | null
@@ -125,12 +126,18 @@ function App() {
   const [textareaRef, setTextareaRef] = useState<HTMLTextAreaElement | null>(null);
   const [lineNumbersRef, setLineNumbersRef] = useState<HTMLDivElement | null>(null);
   // Get initial tab from URL hash
-  const getInitialTab = (): 'explorer' | 'diff' => {
+  const getInitialTab = (): 'explorer' | 'diff' | 'formatter' => {
     const hash = window.location.hash.slice(1);
-    return hash === 'diff' ? 'diff' : 'explorer';
+    if (hash === 'diff') {
+      return 'diff';
+    }
+    if (hash === 'formatter') {
+      return 'formatter';
+    }
+    return 'explorer';
   };
 
-  const [activeTab, setActiveTab] = useState<'explorer' | 'diff'>(getInitialTab());
+  const [activeTab, setActiveTab] = useState<'explorer' | 'diff' | 'formatter'>(getInitialTab());
 
   // Helper function to create language object with getExample function
   const createLanguageObject = (id: string, name: string, icon: string) => {
@@ -157,7 +164,11 @@ function App() {
   useEffect(() => {
     const handleHashChange = () => {
       const hash = window.location.hash.slice(1);
-      setActiveTab(hash === 'diff' ? 'diff' : 'explorer');
+      if (hash === 'diff' || hash === 'formatter') {
+        setActiveTab(hash);
+        return;
+      }
+      setActiveTab('explorer');
     };
 
     window.addEventListener('hashchange', handleHashChange);
@@ -457,6 +468,16 @@ function App() {
                 <i className="bi bi-file-diff me-2"></i>
                 Diff Checker
               </button>
+              <button
+                onClick={() => {
+                  setActiveTab('formatter');
+                  window.location.hash = 'formatter';
+                }}
+                className={`btn ${activeTab === 'formatter' ? 'btn-light' : 'btn-outline-light'}`}
+              >
+                <i className="bi bi-braces me-2"></i>
+                Formatter
+              </button>
             </div>
           </div>
 
@@ -701,8 +722,10 @@ function App() {
             </div>
           </div>
         </div>
-        ) : (
+        ) : activeTab === 'diff' ? (
           <DiffChecker darkMode={darkMode} />
+        ) : (
+          <JsonFormatter darkMode={darkMode} />
         )}
       </main>
 
