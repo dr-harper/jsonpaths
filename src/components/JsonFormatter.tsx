@@ -145,10 +145,13 @@ const JsonFormatter = ({ darkMode }: JsonFormatterProps) => {
   };
 
   return (
-    <div className="container-fluid p-3">
-      <div className="row g-3">
-        <div className="col-12 col-lg-6">
-          <div className={`card shadow-sm ${darkMode ? 'bg-dark text-light' : ''}`}>
+    <div
+      className="container-fluid p-3 d-flex flex-column flex-grow-1 overflow-hidden w-100"
+      style={{ minHeight: 0 }}
+    >
+      <div className="row g-3 flex-grow-1" style={{ minHeight: 0, overflow: 'hidden' }}>
+        <div className="col-12 col-lg-6 d-flex flex-column" style={{ minHeight: 0 }}>
+          <div className={`card shadow-sm flex-fill d-flex flex-column ${darkMode ? 'bg-dark text-light' : ''}`}>
             <div className={`card-header ${darkMode ? 'border-secondary' : ''}`}>
               <div className="d-flex justify-content-between align-items-center">
                 <h6 className="mb-0 fw-bold">
@@ -158,10 +161,15 @@ const JsonFormatter = ({ darkMode }: JsonFormatterProps) => {
                 <button className="btn btn-sm btn-outline-primary" onClick={() => setInput('')}>Clear</button>
               </div>
             </div>
-            <div className="card-body">
+            <div className="card-body d-flex flex-column flex-grow-1" style={{ minHeight: 0 }}>
               <textarea
                 className={`form-control ${darkMode ? 'bg-dark text-light border-secondary' : ''}`}
-                style={{ minHeight: '320px', fontFamily: 'var(--bs-font-monospace)' }}
+                style={{
+                  minHeight: '320px',
+                  fontFamily: 'var(--bs-font-monospace)',
+                  flexGrow: 1,
+                  resize: 'none'
+                }}
                 value={input}
                 onChange={event => setInput(event.target.value)}
                 placeholder="Paste JSON here to format"
@@ -231,8 +239,8 @@ const JsonFormatter = ({ darkMode }: JsonFormatterProps) => {
             </div>
           </div>
         </div>
-        <div className="col-12 col-lg-6 d-flex flex-column gap-3">
-          <div className={`card shadow-sm flex-fill ${darkMode ? 'bg-dark text-light' : ''}`}>
+        <div className="col-12 col-lg-6 d-flex flex-column gap-3" style={{ minHeight: 0 }}>
+          <div className={`card shadow-sm flex-fill d-flex flex-column ${darkMode ? 'bg-dark text-light' : ''}`}>
             <div className={`card-header d-flex justify-content-between align-items-center ${darkMode ? 'border-secondary' : ''}`}>
               <h6 className="mb-0 fw-bold">
                 <i className="bi bi-check2-square me-2 text-success"></i>
@@ -245,9 +253,9 @@ const JsonFormatter = ({ darkMode }: JsonFormatterProps) => {
                 </button>
               </div>
             </div>
-            <div className="card-body">
+            <div className="card-body d-flex flex-column flex-grow-1" style={{ minHeight: 0 }}>
               <div
-                className={`border rounded p-3 ${darkMode ? 'border-secondary bg-dark text-light' : 'bg-light text-dark'}`}
+                className={`border rounded p-3 flex-grow-1 ${darkMode ? 'border-secondary bg-dark text-light' : 'bg-light text-dark'}`}
                 style={{ minHeight: '200px', maxHeight: '420px', overflow: 'auto' }}
               >
                 <pre className="mb-0" style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
@@ -256,7 +264,7 @@ const JsonFormatter = ({ darkMode }: JsonFormatterProps) => {
               </div>
             </div>
           </div>
-          <div className={`card shadow-sm ${darkMode ? 'bg-dark text-light' : ''}`}>
+          <div className={`card shadow-sm flex-shrink-0 ${darkMode ? 'bg-dark text-light' : ''}`}>
             <div className={`card-header ${darkMode ? 'border-secondary' : ''}`}>
               <h6 className="mb-0 fw-bold">
                 <i className="bi bi-bar-chart-line me-2 text-info"></i>
