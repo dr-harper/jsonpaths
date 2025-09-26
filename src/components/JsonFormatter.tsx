@@ -246,12 +246,14 @@ const JsonFormatter = ({ darkMode }: JsonFormatterProps) => {
               </div>
             </div>
             <div className="card-body">
-              <pre
-                className={`mb-0 ${darkMode ? 'text-light' : 'text-dark'}`}
-                style={{ minHeight: '200px', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}
+              <div
+                className={`border rounded p-3 ${darkMode ? 'border-secondary bg-dark text-light' : 'bg-light text-dark'}`}
+                style={{ minHeight: '200px', maxHeight: '420px', overflow: 'auto' }}
               >
-                {formattedOutput || 'Formatted JSON will appear here'}
-              </pre>
+                <pre className="mb-0" style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+                  {formattedOutput || 'Formatted JSON will appear here'}
+                </pre>
+              </div>
             </div>
           </div>
           <div className={`card shadow-sm ${darkMode ? 'bg-dark text-light' : ''}`}>
