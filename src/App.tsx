@@ -4,6 +4,7 @@ import JsonTreeView from './components/JsonTreeView';
 import AiAssistant from './components/AiAssistant';
 import DocumentationModal from './components/DocumentationModal';
 import DiffChecker from './components/DiffChecker';
+import JsonFixer from './components/JsonFixer';
 
 type JsonData =
   | null
@@ -125,12 +126,18 @@ function App() {
   const [textareaRef, setTextareaRef] = useState<HTMLTextAreaElement | null>(null);
   const [lineNumbersRef, setLineNumbersRef] = useState<HTMLDivElement | null>(null);
   // Get initial tab from URL hash
-  const getInitialTab = (): 'explorer' | 'diff' => {
+  const getInitialTab = (): 'explorer' | 'diff' | 'fixer' => {
     const hash = window.location.hash.slice(1);
-    return hash === 'diff' ? 'diff' : 'explorer';
+    if (hash === 'diff') {
+      return 'diff';
+    }
+    if (hash === 'fixer') {
+      return 'fixer';
+    }
+    return 'explorer';
   };
 
-  const [activeTab, setActiveTab] = useState<'explorer' | 'diff'>(getInitialTab());
+  const [activeTab, setActiveTab] = useState<'explorer' | 'diff' | 'fixer'>(getInitialTab());
 
   // Helper function to create language object with getExample function
   const createLanguageObject = (id: string, name: string, icon: string) => {
@@ -157,7 +164,13 @@ function App() {
   useEffect(() => {
     const handleHashChange = () => {
       const hash = window.location.hash.slice(1);
-      setActiveTab(hash === 'diff' ? 'diff' : 'explorer');
+      if (hash === 'diff') {
+        setActiveTab('diff');
+      } else if (hash === 'fixer') {
+        setActiveTab('fixer');
+      } else {
+        setActiveTab('explorer');
+      }
     };
 
     window.addEventListener('hashchange', handleHashChange);
@@ -457,6 +470,16 @@ function App() {
                 <i className="bi bi-file-diff me-2"></i>
                 Diff Checker
               </button>
+              <button
+                onClick={() => {
+                  setActiveTab('fixer');
+                  window.location.hash = 'fixer';
+                }}
+                className={`btn ${activeTab === 'fixer' ? 'btn-light' : 'btn-outline-light'}`}
+              >
+                <i className="bi bi-wrench-adjustable-circle me-2"></i>
+                JSON Fixer
+              </button>
             </div>
           </div>
 
@@ -496,7 +519,7 @@ function App() {
 
       {/* Main Content */}
       <main className="flex-fill d-flex overflow-auto">
-        {activeTab === 'explorer' ? (
+        {activeTab === 'explorer' && (
           <div className="container-fluid p-3 d-flex">
             <div className="row g-3 flex-fill">
             {/* JSON Input Card */}
@@ -701,9 +724,9 @@ function App() {
             </div>
           </div>
         </div>
-        ) : (
-          <DiffChecker darkMode={darkMode} />
         )}
+        {activeTab === 'diff' && <DiffChecker darkMode={darkMode} />}
+        {activeTab === 'fixer' && <JsonFixer darkMode={darkMode} />}
       </main>
 
       {/* Footer */}
