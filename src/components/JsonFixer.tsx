@@ -324,8 +324,8 @@ Important rules:
           <div className="card w-100 shadow-sm d-flex flex-column">
             <div className="card-header d-flex justify-content-between align-items-center">
               <h6 className="mb-0 fw-bold">
-                <i className="bi bi-lightbulb me-2 text-warning"></i>
-                AI Suggestions & Fixed Output
+                <i className="bi bi-chat-left-text me-2 text-warning"></i>
+                Comments & Changes
               </h6>
               {result?.fixedJson && (
                 <button className="btn btn-sm btn-outline-secondary" onClick={handleCopyFixedJson}>
@@ -338,8 +338,8 @@ Important rules:
               {!result && !error && !isLoading && (
                 <div className="text-center text-muted py-5">
                   <i className="bi bi-braces display-4 mb-3"></i>
-                  <p className="mb-1">Paste your JSON on the left to see fixes here.</p>
-                  <small>The assistant will highlight errors and return a corrected version.</small>
+                  <p className="mb-1">Paste your JSON on the left to see comments and changes here.</p>
+                  <small>The assistant will highlight issues and return a corrected version.</small>
                 </div>
               )}
 
@@ -363,8 +363,8 @@ Important rules:
                 <div className="d-flex flex-column gap-3">
                   <div className="alert alert-info mb-0" role="alert">
                     <h6 className="fw-semibold mb-2">
-                      <i className="bi bi-list-check me-2"></i>
-                      Issues detected
+                      <i className="bi bi-chat-quote me-2"></i>
+                      Comments
                     </h6>
                     <ul className="mb-0 ps-3">
                       {result.issues.map((issue, index) => (
@@ -375,8 +375,8 @@ Important rules:
 
                   <div className="alert alert-success mb-0" role="alert">
                     <h6 className="fw-semibold mb-2">
-                      <i className="bi bi-tools me-2"></i>
-                      What changed
+                      <i className="bi bi-arrow-repeat me-2"></i>
+                      Changes applied
                     </h6>
                     <p className="mb-0">{result.fixExplanation}</p>
                     {result.notes && <p className="mb-0 mt-2"><strong>Notes:</strong> {result.notes}</p>}
